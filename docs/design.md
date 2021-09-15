@@ -36,20 +36,34 @@ ParenExpr -> '(' Expr ')'
 
 IntLiteral -> _
 FloatLiteral -> _
-StringLiteral -> _
+
+# StringLiteral doesn't check for validity of escape sequences.
+# It just let the next character after '\' carry on as a normal char, instead of
+# an interpolated sequence or the ending quote of the string.
+InterpolatedStringChar -> [^\r\n\\"$] | '\' <AnyChar>
+InterpolatedStringStart -> '"' InterpolatedStringChar* '$'
+InterpolatedPart -> Ident | '(' Expr ')'
+InterpolatedStringMiddle -> InterpolatedStringChar* '$'
+InterpolatedStringEnd -> InterpolatedStringChar* '"'
+InterpolatedString -> 
+    InterpolatedStringStart 
+    (InterpolatedPart InterpolatedStringMiddle)* 
+    InterpolatedPart InterpolatedStringEnd
+NoninterpolatedString -> '"' InterpolatedStringChar* '"'
+StringLiteral -> NoninterpolatedString | InterpolatedString
 
 # SymbolLiteral: -> Symbol
-SymbolLiteral -> ':'++Ident
+SymbolLiteral -> ':'<>Ident
 
 # TupleLiteral: if Single exists; (-> Tuple<Single::Ty>) else (-> Tuple<First::Ty, ...Other::Ty>)
-TupleLiteral -> '(' First=Expr (',' Other=Expr)+ ')' | '(' Single=Expr ',' ')'
+TupleLiteral -> '(' First=Expr (',' Other=Expr)+ ','? ')' | '(' Single=Expr ',' ')'
 
 # ArrayLiteral: -> type_upper_bound(...Expr::Ty)
-ArrayLiteral -> '[' (Expr (',' Expr)*)? ']'
+ArrayLiteral -> '[' (Expr (',' Expr)* ','?)? ']'
 
 # ObjectLiteral: -> Object
 ObjectKey -> Ident | '[' Expr ']'
-ObjectLiteral -> '{' (ObjectKey ':' Expr)* '}'
+ObjectLiteral -> '{' (ObjectKey ':' Expr (',' ObjectKey ':' Expr)* ','? ) '}'
 
 LiteralExpr -> 
     | IntLiteral 
