@@ -8,8 +8,8 @@ use inkstone::game
 let env_proto = {
 	__proto: game_env_proto,
 	visit: |self| do
-		set! self.visited true
-		set! self.visit_cnt (self.visit_cnt + 1)
+		self.visited = true
+		self.visit_cnt = (self.visit_cnt + 1)
 	end
 }
 
@@ -35,7 +35,7 @@ def visit(implicit env) do
 	env "You opened the door."
 	env "It is filled withthe smell of old wood, but nothing interesting happened."
 	
-	env.visit
+	(env.visit)
 	
 	env.choice "Visit again?" [
 		("Yes!", || tail visit),
@@ -62,6 +62,6 @@ def ending_2(implicit env) do
 	end
 end
 
-let env = new_env
+let env = (new_env)
 game_start env
 ```

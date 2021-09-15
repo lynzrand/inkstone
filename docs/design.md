@@ -23,9 +23,11 @@ UseStmt -> 'use' Namespace EOL
 LetStmt -> 'let' Ident<Var> (':' Type) '=' Expr
 
 FuncCallParam -> Expr | Ident<FuncParam> ':' Expr
-FuncCallExpr -> Expr<type=Function> FuncCallParam*
+FuncCallExpr -> '(' Expr<type=Function> ')' | Expr<type=Function> FuncCallParam+
+# Functions with no params must be called inside a pair of parenthesis.
+# This is to avoid ambiguity: is `f` the value of variable `f`, or calling `f` with no params?
 
-BinaryOp -> '+' | '-' | '*' | '/' | '**' | '%' | '&&' | '||' | '&' | '|' | '^' | 'and' | 'or'
+BinaryOp -> '+' | '-' | '*' | '/' | '**' | '%' | '&&' | '||' | '&' | '|' | '^' | '<' | '>' | '<=' | '>=' | '==' | '!=' | 'and' | 'or'
 BinaryExpr -> Expr BinaryOp Expr
 
 UnaryOp -> '!'
@@ -42,7 +44,7 @@ FloatLiteral -> _
 # an interpolated sequence or the ending quote of the string.
 InterpolatedStringChar -> [^\r\n\\"$] | '\' <AnyChar>
 InterpolatedStringStart -> '"' InterpolatedStringChar* '$'
-InterpolatedPart -> Ident | '(' Expr ')'
+InterpolatedPart -> Ident | '{' Expr '}'
 InterpolatedStringMiddle -> InterpolatedStringChar* '$'
 InterpolatedStringEnd -> InterpolatedStringChar* '"'
 InterpolatedString -> 
@@ -83,6 +85,10 @@ IfExpr -> 'if' Expr<Ty=bool> (EOL | ':') IfBlock=BlockInnerExpr
 # WhileExpr: if no `'break' Value` inside body: (-> nil) else (-> type_upperbound(...Value))
 WhileExpr -> 'while’ Expr<Ty=bool> (EOL | ':') Stmt* Expr? 'end'
 
+# ClosureExpr: -> Fn(...FuncParamList::Ty) -> Expr::Ty
+ClosureExpr -> ('|' FuncParamList '|' | '||') Expr
+# Oh hey, we need to modify the lexer so that it returns two bars when we want it to!
+
 Expr -> 
     | ParenExpr
     | UnaryExpr
@@ -106,7 +112,7 @@ Stmt -> StmtInner (EOL | ';')
 
 FuncParam -> 'implicit'? Ident (':' Type)? ('=' Expr<Const>)?
 FuncParamList -> FuncParam (',' FuncParam)*
-# FuncDef: Fn(...FuncParamList::Ty) -> Return::Ty ?? nil
+# FuncDef: -> Fn(...FuncParamList::Ty) -> (Return::Ty ?? Any)
 FuncDef -> 'def' Ident '(' FuncParamList ')' ('->' Return=Ty)? BlockExpr
 
 ModuleDef -> 'mod' Ident Block?
