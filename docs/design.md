@@ -1,5 +1,19 @@
 # Design of Inkstone
 
+## Introduction
+
+_Inkstone is NOT a markup language._
+
+Inkstone was created as the author finds markup languages for game scripts are overwhelmed with unnecessary special symbols and tags or just being too domain-specific. These languages include:
+
+- [RenPy](https://www.renpy.org/)
+- [Ink](https://github.com/inkie/ink)
+- [Kirikiri](http://kirikirikag.sourceforge.net/contents/index.html)
+
+As a result, Inkstone is here for an experimental general-purpose language, that tries to make scripts less frustrating to work with. Inkstone tries to achieve this through a careful selection of language features, grammar and some clever library design.
+
+Inkstone takes ideas from many other languages, like Lisp, OCaml, Elixir, Ruby, Haskell and Javascript.
+
 ## Features
 
 - Duck typing & prototype-based OOP
@@ -7,6 +21,7 @@
 - ADT
   - Tuple, Vector, Map
 - Implicit params
+
 
 ## Spec
 
@@ -86,8 +101,10 @@ IfExpr -> 'if' Expr<Ty=bool> (EOL | ':') IfBlock=BlockInnerExpr
 WhileExpr -> 'while’ Expr<Ty=bool> (EOL | ':') Stmt* Expr? 'end'
 
 # ClosureExpr: -> Fn(...FuncParamList::Ty) -> Expr::Ty
-ClosureExpr -> ('|' FuncParamList '|' | '||') Expr
-# Oh hey, we need to modify the lexer so that it returns two bars when we want it to!
+ClosureExpr -> '\' FuncParamList? '->' Expr
+
+# ReturnExpr -> !
+ReturnExpr -> 'return' Expr
 
 Expr -> 
     | ParenExpr
@@ -118,6 +135,22 @@ FuncDef -> 'def' Ident '(' FuncParamList ')' ('->' Return=Ty)? BlockExpr
 ModuleDef -> 'mod' Ident Block?
 ```
 
+### Precedence
+
+From high to low:
+
+- Lambdas `\x -> block`
+- Children accessor `x.a` `x[a]`
+- Func call `func a b`
+- Unary Op `!x`
+- Power Op `x ** y`
+- Multiplicative Op `x * y` `x / y` `x % y`
+- Bitwise Op `x & y` `x | y` `x ^ y`
+- Additive Op `x + y` `x - y`
+- Comparison Op `x < y` `x > y` `x <= y` `x >= y` `x == y` `x != y`
+- Unary Logical Op `not x`
+- Binary Logical Op `x and y` `x or y`
+
 ## Closures
 
 The following pseudocode should do the job.
@@ -137,3 +170,5 @@ impl<ReturnTy, Params...> Fn(Params...) for Closure<ReturnTy, Params...> {
 ```
 
 ## Continuations
+
+
