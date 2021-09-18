@@ -1,5 +1,4 @@
-use logos;
-use logos::Logos;
+use logos::{Lexer, Logos};
 
 #[derive(Logos)]
 pub enum Token<'lex> {
@@ -9,15 +8,15 @@ pub enum Token<'lex> {
     WS,
     /// End of line
     #[regex(r"\n|\r|\r\n")]
-    EOL,
+    Eol,
 
     /// Anything that doesn't match
     #[error]
     Error,
 
     // === Keywords ===
-    #[token("do")]
-    DoKw,
+    #[token("begin")]
+    BeginKw,
     #[token("end")]
     EndKw,
     #[token("use")]
@@ -26,14 +25,18 @@ pub enum Token<'lex> {
     LetKw,
     #[token("def")]
     DefKw,
-    #[token("implicit")]
-    ImplicitKw,
+    // #[token("implicit")]
+    // ImplicitKw,
     #[token("if")]
     IfKw,
     #[token("else")]
     ElseKw,
     #[token("while")]
     WhileKw,
+    #[token("for")]
+    ForKw,
+    #[token("in")]
+    InKw,
     #[token("mod")]
     ModKw,
     // `and`, `or` and `not` are both keywords and operators
@@ -57,14 +60,14 @@ pub enum Token<'lex> {
     Float,
 
     /// An RFC8259-compliant string. Invalid cases are handled afterward.
-    #[regex(r#""(([^\r\n\\"]|\\.)*)""#)]
+    #[regex(r#""(([^\r\n\\$"]|\\.)*)""#, strip_string_start_end)]
     NoninterpolatedString(&'lex str),
-    #[regex(r#""([^\r\n\\"]|\\.)*\$"#)]
-    InterpolatedStringStart,
-    #[regex(r#"([^\r\n\\"]|\\.)*\$"#)]
-    InterpolatedStringMiddle,
-    #[regex(r#"([^\r\n\\"]|\\.)*""#)]
-    InterpolatedStringEnd,
+    #[regex(r#""([^\r\n\\$"]|\\.)*\$"#, strip_string_start_end)]
+    InterpolatedStringStart(&'lex str),
+    #[regex(r#"([^\r\n\\$"]|\\.)*\$"#, strip_string_end)]
+    InterpolatedStringMiddle(&'lex str),
+    #[regex(r#"([^\r\n\\$"]|\\.)*""#, strip_string_end)]
+    InterpolatedStringEnd(&'lex str),
 
     // === Operators ===
     #[token("+")]
@@ -107,6 +110,8 @@ pub enum Token<'lex> {
     Not,
     #[token(":")]
     Colon,
+    #[token("\\")]
+    Backslash,
     #[token("->")]
     Arrow,
     #[token(";")]
@@ -129,4 +134,14 @@ pub enum Token<'lex> {
     LBrace,
     #[token("}")]
     RBrace,
+}
+
+fn strip_string_start_end<'lex>(lex: &Lexer<'lex, Token<'lex>>) -> &'lex str {
+    let slice = lex.slice();
+    &slice[1..slice.len() - 1]
+}
+
+fn strip_string_end<'lex>(lex: &Lexer<'lex, Token<'lex>>) -> &'lex str {
+    let slice = lex.slice();
+    &slice[0..slice.len() - 1]
 }
