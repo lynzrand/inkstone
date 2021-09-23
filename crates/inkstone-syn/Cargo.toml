@@ -8,3 +8,5 @@ edition = "2018"
 [dependencies]
 combine = "4.6.1"
 logos = "0.12.0"
+num_enum = "0.5.4"
+rowan = "0.14.0"

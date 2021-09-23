@@ -1,7 +1,12 @@
-use logos::{Lexer, Logos};
+use std::convert::TryFrom;
 
-#[derive(Logos)]
-pub enum Token<'lex> {
+use logos::Logos;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+
+#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive)]
+#[repr(u16)]
+pub enum Syntax {
+    // =========== Tokens ============
     // === Aux Tokens ===
     /// Whitespace
     #[regex(r"\s")]
@@ -9,10 +14,6 @@ pub enum Token<'lex> {
     /// End of line
     #[regex(r"\n|\r|\r\n")]
     Eol,
-
-    /// Anything that doesn't match
-    #[error]
-    Error,
 
     // === Keywords ===
     #[token("begin")]
@@ -60,14 +61,14 @@ pub enum Token<'lex> {
     Float,
 
     /// An RFC8259-compliant string. Invalid cases are handled afterward.
-    #[regex(r#""(([^\r\n\\$"]|\\.)*)""#, strip_string_start_end)]
-    NoninterpolatedString(&'lex str),
-    #[regex(r#""([^\r\n\\$"]|\\.)*\$"#, strip_string_start_end)]
-    InterpolatedStringStart(&'lex str),
-    #[regex(r#"([^\r\n\\$"]|\\.)*\$"#, strip_string_end)]
-    InterpolatedStringMiddle(&'lex str),
-    #[regex(r#"([^\r\n\\$"]|\\.)*""#, strip_string_end)]
-    InterpolatedStringEnd(&'lex str),
+    #[regex(r#""(([^\r\n\\$"]|\\.)*)""#)]
+    NoninterpolatedString,
+    #[regex(r#""([^\r\n\\$"]|\\.)*\$"#)]
+    InterpolatedStringStart,
+    #[regex(r#"([^\r\n\\$"]|\\.)*\$"#)]
+    InterpolatedStringMiddle,
+    #[regex(r#"([^\r\n\\$"]|\\.)*""#)]
+    InterpolatedStringEnd,
 
     // === Operators ===
     #[token("+")]
@@ -134,14 +135,48 @@ pub enum Token<'lex> {
     LBrace,
     #[token("}")]
     RBrace,
+
+    /// Anything that doesn't match. Also the last token entry.
+    #[error]
+    Error,
+
+    // ================ AST Nodes ================
+    // Expressions
+    Expr,
+
+    // Statements
+    Stmt,
+
+    // Block-scope elements
+    Block,
+    FuncDef,
+    Lambda,
+    ModuleDef,
 }
 
-fn strip_string_start_end<'lex>(lex: &Lexer<'lex, Token<'lex>>) -> &'lex str {
-    let slice = lex.slice();
-    &slice[1..slice.len() - 1]
+impl Syntax {
+    pub fn is_token(&self) -> bool {
+        *self <= Syntax::Error
+    }
 }
 
-fn strip_string_end<'lex>(lex: &Lexer<'lex, Token<'lex>>) -> &'lex str {
-    let slice = lex.slice();
-    &slice[0..slice.len() - 1]
+impl From<Syntax> for rowan::SyntaxKind {
+    fn from(kind: Syntax) -> Self {
+        rowan::SyntaxKind(kind.into())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum InkstoneLang {}
+
+impl rowan::Language for InkstoneLang {
+    type Kind = Syntax;
+
+    fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
+        Syntax::try_from(raw.0).expect("Invalid syntax tag type!")
+    }
+
+    fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
+        rowan::SyntaxKind(kind.into())
+    }
 }
