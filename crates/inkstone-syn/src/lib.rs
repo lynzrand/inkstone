@@ -2,6 +2,8 @@ use std::{collections::VecDeque, ops::Range};
 
 use token::Token;
 
+pub mod ast;
+pub mod parse;
 pub mod token;
 
 /// The main lexer used in Inkstone.

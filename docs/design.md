@@ -98,28 +98,44 @@ IfExpr -> 'if' Expr<Ty=bool> (EOL | ':') IfBlock=BlockInnerExpr
     'end'
 
 # WhileExpr: if no `'break' Value` inside body: (-> nil) else (-> type_upperbound(...Value))
-WhileExpr -> 'while’ Expr<Ty=bool> (EOL | ':') Stmt* Expr? 'end'
+WhileExpr -> 'while’ Expr<Ty=bool> (EOL | ':') BlockInnerExpr 'end'
 
 # ClosureExpr: -> Fn(...FuncParamList::Ty) -> Expr::Ty
 ClosureExpr -> '\' FuncParamList? '->' Expr
 
-# ReturnExpr -> !
+# ReturnExpr: -> !
 ReturnExpr -> 'return' Expr
+
+# VarExpr: -> Scope::ident(Ident)::Ty
+VarExpr -> Ident
+
+# DotExpr: -> Expr.ident::Ty
+DotExpr -> Expr '.' Ident
+
+# SubscriptExpr: -> Receiver::operator[](Subscript::Ty)::Ty
+SubscriptExpr -> Receiver=Expr '[' Subscript=Expr ']'
+
+LValue -> VarExpr | DotChildExpr | SubscriptExpr
+# AssignExpr -> nil
+AssignExpr -> LValue '=' Expr
 
 Expr -> 
     | ParenExpr
     | UnaryExpr
     | BinaryExpr
     | FuncCallExpr
+    | VarExpr
+    | DotExpr
+    | SubscriptExpr
     | LiteralExpr
     | IfExpr
     | BlockExpr
 
-# BlockInnerExpr: if Expr exists: (-> Expr::Ty) else: (-> nil)
-BlockInnerExpr -> Stmt* Expr?
+# BlockInnerExpr: if len(Stmt) > 0: (-> Stmt[-1]::Ty) else: (-> nil)
+BlockInnerExpr -> Stmt*
 
 # BlockExpr: BlockInnerExpr::Ty
-BlockExpr -> 'do' BlockInnerExpr 'end'
+BlockExpr -> 'begin' BlockInnerExpr 'end'
 
 ExprStmt -> Expr
 
@@ -127,10 +143,9 @@ StmtInner -> ExprStmt | UseStmt | FuncDef | ModuleDef
 Stmt -> StmtInner (EOL | ';')
 
 
-FuncParam -> 'implicit'? Ident (':' Type)? ('=' Expr<Const>)?
+FuncParam -> Ident
 FuncParamList -> FuncParam (',' FuncParam)*
-# FuncDef: -> Fn(...FuncParamList::Ty) -> (Return::Ty ?? Any)
-FuncDef -> 'def' Ident '(' FuncParamList ')' ('->' Return=Ty)? BlockExpr
+FuncDef -> 'def' Ident FuncParamList BlockExpr
 
 ModuleDef -> 'mod' Ident Block?
 ```
@@ -150,6 +165,11 @@ From high to low:
 - Comparison Op `x < y` `x > y` `x <= y` `x >= y` `x == y` `x != y`
 - Unary Logical Op `not x`
 - Binary Logical Op `x and y` `x or y`
+- Assignment Op `x = y`
+
+## OOP
+
+OOP is achieved by prototype-based 
 
 ## Closures
 
