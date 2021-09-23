@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, ops::Range};
 
-use node::Syntax;
+use node::SynTag;
 
 pub mod ast;
 pub mod node;
@@ -9,9 +9,9 @@ pub mod parse;
 /// The main lexer used in Inkstone.
 pub struct Lexer<'lex> {
     /// The actual lexer that does the job.
-    inner: logos::Lexer<'lex, Syntax>,
+    inner: logos::Lexer<'lex, SynTag>,
     /// Tokens that has been splitted and put back into lexer.
-    pending_tokens: VecDeque<Syntax>,
+    pending_tokens: VecDeque<SynTag>,
     /// Whether to ignore newlines when lexing.
     ignore_newline: bool,
 }
@@ -60,19 +60,19 @@ impl<'lex> Lexer<'lex> {
 
     /// Push tokens back into the lexer. This method pushes to the _front_ of the token list, and
     /// follows a LIFO rule. Tokens will be pushed before those [`backtrack_back`] pushed.
-    pub fn backtrack_front(&mut self, tok: Syntax) {
+    pub fn backtrack_front(&mut self, tok: SynTag) {
         self.pending_tokens.push_front(tok)
     }
 
     /// Push tokens back into the lexer. This method pushes to the _back_ of the token list, and
     /// follows a FIFO rule. Tokens will be pushed after those [`backtrack_front`] pushed.
-    pub fn backtrack_back(&mut self, tok: Syntax) {
+    pub fn backtrack_back(&mut self, tok: SynTag) {
         self.pending_tokens.push_back(tok)
     }
 }
 
 impl<'lex> Iterator for Lexer<'lex> {
-    type Item = Syntax;
+    type Item = SynTag;
 
     fn next(&mut self) -> Option<Self::Item> {
         // check pending tokens or lex the next one

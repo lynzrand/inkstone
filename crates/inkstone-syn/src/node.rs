@@ -1,11 +1,12 @@
-use std::convert::TryFrom;
-
+use enum_ordinalize::Ordinalize;
 use logos::Logos;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive)]
+/// The syntax tag type.
+///
+/// This type is used both in lexing (as token) and in AST (as subtree tag).
+#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Ordinalize)]
 #[repr(u16)]
-pub enum Syntax {
+pub enum SynTag {
     // =========== Tokens ============
     // === Aux Tokens ===
     /// Whitespace
@@ -141,28 +142,53 @@ pub enum Syntax {
     Error,
 
     // ================ AST Nodes ================
+    Name,
+
     // Expressions
-    Expr,
+    ParenExpr,
+    UnaryExpr,
+    BinaryExpr,
+    FunctionCallExpr,
+    VarExpr,
+    DotExpr,
+    SubscriptExpr,
+    LiteralExpr,
+    IfExpr,
+    WhileLoopExpr,
+    ForLoopExpr,
+    BlockExpr,
+    LambdaExpr,
 
     // Statements
-    Stmt,
+    ExprStmt,
+    UseStmt,
 
     // Block-scope elements
     Block,
+
     FuncDef,
-    Lambda,
+    FuncParamList,
+    FuncParam,
+
     ModuleDef,
+
+    /// The root node of the syntax tree
+    Root,
 }
 
-impl Syntax {
+impl SynTag {
     pub fn is_token(&self) -> bool {
-        *self <= Syntax::Error
+        *self <= SynTag::Error
+    }
+
+    pub fn is_trivia(&self) -> bool {
+        *self == SynTag::WS
     }
 }
 
-impl From<Syntax> for rowan::SyntaxKind {
-    fn from(kind: Syntax) -> Self {
-        rowan::SyntaxKind(kind.into())
+impl From<SynTag> for rowan::SyntaxKind {
+    fn from(kind: SynTag) -> Self {
+        rowan::SyntaxKind(kind.ordinal())
     }
 }
 
@@ -170,13 +196,13 @@ impl From<Syntax> for rowan::SyntaxKind {
 enum InkstoneLang {}
 
 impl rowan::Language for InkstoneLang {
-    type Kind = Syntax;
+    type Kind = SynTag;
 
     fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
-        Syntax::try_from(raw.0).expect("Invalid syntax tag type!")
+        SynTag::from_ordinal(raw.0).expect("Invalid syntax tag type!")
     }
 
     fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
-        rowan::SyntaxKind(kind.into())
+        rowan::SyntaxKind(kind.ordinal())
     }
 }
