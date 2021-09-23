@@ -143,6 +143,7 @@ pub enum SynTag {
 
     // ================ AST Nodes ================
     Name,
+    Namespace,
 
     // Expressions
     ParenExpr,
@@ -161,6 +162,7 @@ pub enum SynTag {
 
     // Statements
     ExprStmt,
+    LetStmt,
     UseStmt,
 
     // Block-scope elements
