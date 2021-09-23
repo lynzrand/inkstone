@@ -58,6 +58,18 @@ impl<'lex> Lexer<'lex> {
         self.inner.slice()
     }
 
+    /// Return a copy of the current front token without really consuming it.
+    pub fn peek(&mut self) -> Option<SynTag> {
+        if self.pending_tokens.is_empty() {
+            let next = self.next()?;
+            self.pending_tokens.push_front(next);
+        }
+
+        debug_assert!(!self.pending_tokens.is_empty());
+
+        self.pending_tokens.front().copied()
+    }
+
     /// Push tokens back into the lexer. This method pushes to the _front_ of the token list, and
     /// follows a LIFO rule. Tokens will be pushed before those [`backtrack_back`] pushed.
     pub fn backtrack_front(&mut self, tok: SynTag) {

@@ -14,7 +14,7 @@ pub enum SynTag {
     WS,
     /// End of line
     #[regex(r"\n|\r|\r\n")]
-    Eol,
+    LF,
 
     // === Keywords ===
     #[token("begin")]
