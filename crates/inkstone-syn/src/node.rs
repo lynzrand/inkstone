@@ -4,7 +4,7 @@ use logos::Logos;
 /// The syntax tag type.
 ///
 /// This type is used both in lexing (as token) and in AST (as subtree tag).
-#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Ordinalize)]
+#[derive(Logos, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Ordinalize)]
 #[repr(u16)]
 pub enum SynTag {
     // =========== Tokens ============
@@ -166,7 +166,10 @@ pub enum SynTag {
     UseStmt,
 
     // Block-scope elements
+    /// A block with `begin` and `end`s
     Block,
+    /// The inner contents of a [`Block`]
+    BlockScope,
 
     FuncDef,
     FuncParamList,
