@@ -1,6 +1,8 @@
 use rowan::GreenNodeBuilder;
 
 mod tag_util;
+#[cfg(test)]
+mod test;
 
 use crate::node::SynTag::{self, *};
 use crate::Lexer;

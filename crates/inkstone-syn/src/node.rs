@@ -198,7 +198,7 @@ impl From<SynTag> for rowan::SyntaxKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum InkstoneLang {}
+pub enum InkstoneLang {}
 
 impl rowan::Language for InkstoneLang {
     type Kind = SynTag;
