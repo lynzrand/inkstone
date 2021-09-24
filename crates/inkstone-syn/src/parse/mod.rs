@@ -1,11 +1,14 @@
-use rowan::GreenNodeBuilder;
+use rowan::{GreenNode, GreenNodeBuilder, SyntaxNode};
 
 mod tag_util;
 #[cfg(test)]
 mod test;
 
+use crate::node::InkstoneLang;
 use crate::node::SynTag::{self, *};
 use crate::Lexer;
+
+pub type Errors = Vec<String>;
 
 pub struct Parser<'src> {
     /// The lexer that does the job.
@@ -17,7 +20,7 @@ pub struct Parser<'src> {
     b: GreenNodeBuilder<'src>,
 
     /// List of errors. To be changed.
-    errors: Vec<String>,
+    errors: Errors,
 
     /// Stack of synchronization tokens (e.g. `(`/`)`, `begin`/`end`, etc.).
     ///
@@ -37,6 +40,10 @@ impl<'src> Parser<'src> {
 
     pub fn parse(&mut self) {
         self.parse_root()
+    }
+
+    pub fn finish(self) -> (SyntaxNode<InkstoneLang>, Errors) {
+        (SyntaxNode::new_root(self.b.finish()), self.errors)
     }
 
     fn log_err(&mut self, err: String) {
@@ -131,5 +138,21 @@ impl<'src> Parser<'src> {
         self.eat_whitespace_or_line_feeds();
     }
 
-    fn parse_expr(&mut self) {}
+    fn parse_expr(&mut self) {
+        debug_assert!(
+            self.peek().unwrap().can_start_expr(),
+            "Must start with some token that can start an expression"
+        );
+
+        match self.peek().unwrap() {
+            BeginKw => {
+                self.parse_block();
+            }
+            _ => {
+                todo!();
+            }
+        }
+
+        self.eat_whitespace();
+    }
 }

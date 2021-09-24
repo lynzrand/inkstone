@@ -10,7 +10,7 @@ pub enum SynTag {
     // =========== Tokens ============
     // === Aux Tokens ===
     /// Whitespace
-    #[regex(r"\s")]
+    #[regex(r"[ \t]+")]
     WS,
     /// End of line
     #[regex(r"\n|\r|\r\n")]
@@ -64,12 +64,12 @@ pub enum SynTag {
     /// An RFC8259-compliant string. Invalid cases are handled afterward.
     #[regex(r#""(([^\r\n\\$"]|\\.)*)""#)]
     NoninterpolatedString,
-    #[regex(r#""([^\r\n\\$"]|\\.)*\$"#)]
-    InterpolatedStringStart,
-    #[regex(r#"([^\r\n\\$"]|\\.)*\$"#)]
-    InterpolatedStringMiddle,
-    #[regex(r#"([^\r\n\\$"]|\\.)*""#)]
-    InterpolatedStringEnd,
+    // #[regex(r#""([^\r\n\\$"]|\\.)*\$"#)]
+    // InterpolatedStringStart,
+    // #[regex(r#"([^\r\n\\$"]|\\.)*\$"#)]
+    // InterpolatedStringMiddle,
+    // #[regex(r#"([^\r\n\\$"]|\\.)*""#)]
+    // InterpolatedStringEnd,
 
     // === Operators ===
     #[token("+")]

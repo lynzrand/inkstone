@@ -26,7 +26,8 @@ impl SynTag {
             | Add | Sub | Amp | Backslash
             // literals
             | Ident | Symbol | Int | Float
-            | NoninterpolatedString | InterpolatedStringStart
+            | NoninterpolatedString 
+            // | InterpolatedStringStart
             | LParen | LBracket | LBrace
         )
     }
@@ -67,11 +68,11 @@ fn format_tree(node: &SyntaxNode<InkstoneLang>, f: &mut Formatter) -> std::fmt::
         match ev {
             rowan::WalkEvent::Enter(e) => {
                 for _ in 0..depth {
-                    f.write_str("  ")?;
+                    f.write_str("    ")?;
                 }
                 match e {
-                    rowan::NodeOrToken::Node(n) => writeln!(f, "{:?}", n),
-                    rowan::NodeOrToken::Token(t) => writeln!(f, "#{:?}", t),
+                    rowan::NodeOrToken::Node(n) => writeln!(f, "{:?}", n.kind()),
+                    rowan::NodeOrToken::Token(t) => writeln!(f, "{:?} {:?}", t.kind(), t.text()),
                 }?;
                 depth += 1;
             }
