@@ -26,7 +26,7 @@ impl SynTag {
             | Add | Sub | Amp | Backslash
             // literals
             | Ident | Symbol | Int | Float
-            | NoninterpolatedString 
+            | StringLiteral
             // | InterpolatedStringStart
             | LParen | LBracket | LBrace
         )

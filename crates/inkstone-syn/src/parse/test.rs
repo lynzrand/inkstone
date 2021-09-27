@@ -13,7 +13,7 @@ fn assert_tree_matches<R: Borrow<SyntaxNode<InkstoneLang>>>(r: R, tree: &str) {
     let actual = result_formatted.trim();
     let expected = tree.trim();
     if actual != expected {
-        let diff = colored_diff::PrettyDifference { actual, expected };
+        let diff = colored_diff::PrettyDifference { expected, actual };
         panic!("tree mismatch (< expected / > actual):\n{}", diff);
     }
 }
@@ -94,4 +94,16 @@ Root
             EndKw "end"
         "#,
     );
+}
+
+#[test]
+fn test_parse_expr() {
+    let input = "a.c (1+1) 2 (3 + 4 * 5 ** 6) (foo::bar event)";
+
+    let mut parser = Parser::new(input);
+    parser.parse_expr(false);
+
+    let (result, _) = parser.finish();
+
+    eprintln!("{}", FormatTree(&result))
 }

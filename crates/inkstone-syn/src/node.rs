@@ -56,14 +56,14 @@ pub enum SynTag {
     // === Literal Tokens ===
     #[regex(r":[a-zA-Z_][0-9a-zA-Z_?!]*")]
     Symbol,
-    #[regex(r"-?0|0x[0-9a-fA-F_]+|[0-9]+")]
+    #[regex(r"0|0x[0-9a-fA-F_]+|[0-9]+")]
     Int,
-    #[regex(r"[+-]?[0-9]*\.[0-9]+([eE][+-]?[0-9]+)")]
+    #[regex(r"[0-9]*\.[0-9]+([eE][+-]?[0-9]+)")]
     Float,
 
     /// An RFC8259-compliant string. Invalid cases are handled afterward.
     #[regex(r#""(([^\r\n\\$"]|\\.)*)""#)]
-    NoninterpolatedString,
+    StringLiteral,
     // #[regex(r#""([^\r\n\\$"]|\\.)*\$"#)]
     // InterpolatedStringStart,
     // #[regex(r#"([^\r\n\\$"]|\\.)*\$"#)]
@@ -107,7 +107,7 @@ pub enum SynTag {
     #[token("|")]
     Bar,
     #[token("^")]
-    BixXor,
+    BitXor,
     #[token("!")]
     Not,
     #[token(":")]
@@ -137,6 +137,8 @@ pub enum SynTag {
     #[token("}")]
     RBrace,
 
+    Eof,
+
     /// Anything that doesn't match. Also the last token entry.
     #[error]
     Error,
@@ -144,6 +146,11 @@ pub enum SynTag {
     // ================ AST Nodes ================
     Name,
     Namespace,
+
+    // Literals
+    TupleLiteralExpr,
+    ObjectLiteralExpr,
+    ArrayLiteralExpr,
 
     // Expressions
     ParenExpr,
@@ -159,6 +166,8 @@ pub enum SynTag {
     ForLoopExpr,
     BlockExpr,
     LambdaExpr,
+
+    Expr,
 
     // Statements
     ExprStmt,

@@ -57,17 +57,18 @@ FloatLiteral -> _
 # StringLiteral doesn't check for validity of escape sequences.
 # It just let the next character after '\' carry on as a normal char, instead of
 # an interpolated sequence or the ending quote of the string.
-InterpolatedStringChar -> [^\r\n\\"$] | '\' <AnyChar>
-InterpolatedStringStart -> '"' InterpolatedStringChar* '$'
-InterpolatedPart -> Ident | '{' Expr '}'
-InterpolatedStringMiddle -> InterpolatedStringChar* '$'
-InterpolatedStringEnd -> InterpolatedStringChar* '"'
-InterpolatedString -> 
-    InterpolatedStringStart 
-    (InterpolatedPart InterpolatedStringMiddle)* 
-    InterpolatedPart InterpolatedStringEnd
-NoninterpolatedString -> '"' InterpolatedStringChar* '"'
-StringLiteral -> NoninterpolatedString | InterpolatedString
+# InterpolatedStringChar -> [^\r\n\\"$] | '\' <AnyChar>
+StringChar -> [^\r\n\\"] | '\' <AnyChar>
+# InterpolatedStringStart -> '"' InterpolatedStringChar* '$'
+# InterpolatedPart -> Ident | '{' Expr '}'
+# InterpolatedStringMiddle -> InterpolatedStringChar* '$'
+# InterpolatedStringEnd -> InterpolatedStringChar* '"'
+# InterpolatedString -> 
+#     InterpolatedStringStart 
+#     (InterpolatedPart InterpolatedStringMiddle)* 
+#     InterpolatedPart InterpolatedStringEnd
+StringLiteral -> '"' InterpolatedStringChar* '"'
+# StringLiteral -> NoninterpolatedString | InterpolatedString
 
 # SymbolLiteral: -> Symbol
 SymbolLiteral -> ':'<>Ident
@@ -154,8 +155,9 @@ ModuleDef -> 'mod' Ident Block?
 
 From high to low:
 
-- Lambdas `\x -> block`
-- Children accessor `x.a` `x[a]`
+- Primary Expr: Var, Literal, Namespace, Blocks, If/While/For loops
+- Dot/Subscript Expr `x.a` `x[a]`
+- Lambda `\x -> block`, 
 - Func call `func a b`
 - Unary Op `!x`
 - Power Op `x ** y`

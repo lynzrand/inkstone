@@ -1,12 +1,17 @@
-use rowan::{GreenNode, GreenNodeBuilder, SyntaxNode};
-
+mod pratt_util;
 mod tag_util;
 #[cfg(test)]
 mod test;
 
+use rowan::{GreenNode, GreenNodeBuilder, SyntaxNode};
+
 use crate::node::InkstoneLang;
 use crate::node::SynTag::{self, *};
 use crate::Lexer;
+
+use self::pratt_util::{
+    infix_binding_power, postfix_binding_power, prefix_binding_power, FUNCTION_CALL_PRECEDENCE,
+};
 
 pub type Errors = Vec<String>;
 
@@ -62,12 +67,24 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn eat(&mut self) -> Option<SynTag> {
-        self.eat_if(|_| true)
+    fn eat(&mut self) -> SynTag {
+        self.eat_if(|_| true).unwrap_or(Eof)
     }
 
-    fn peek(&mut self) -> Option<SynTag> {
-        self.lexer.peek()
+    fn try_eat_token(&mut self, s: SynTag) -> bool {
+        self.eat_if(|t| t == s).is_some()
+    }
+
+    fn expect(&mut self, s: SynTag) -> bool {
+        let res = self.try_eat_token(s);
+        if !res {
+            panic!("Token mismatch! expected: {:?}, got: {:?}", s, self.peek());
+        }
+        res
+    }
+
+    fn peek(&mut self) -> SynTag {
+        self.lexer.peek().unwrap_or(Eof)
     }
 
     fn peek_is(&mut self, s: SynTag) -> bool {
@@ -85,14 +102,21 @@ impl<'src> Parser<'src> {
     fn eat_whitespace_or_line_feeds(&mut self) {
         while self.eat_if(|x| x == WS || x == LF).is_some() {}
     }
+
+    fn eat_whitespace_in_parenthesis(&mut self, in_parenthesis: bool) {
+        while self
+            .eat_if(|x| x == WS || (in_parenthesis && x == LF))
+            .is_some()
+        {}
+    }
 }
 
 /// The concrete parsing implementations.
 ///
 /// # Note
 ///
-/// - Parsing methods should take care of any whitespace or line feed **after**
-///   them, but not **before** them.
+/// - Parsing methods should not take care of any whitespace or line feed around
+///   it, unless necessary.
 /// - Whitespace tokens around a node should be placed **outside** that node.
 impl<'src> Parser<'src> {
     fn parse_root(&mut self) {
@@ -109,6 +133,7 @@ impl<'src> Parser<'src> {
 
         while self.peek_if(|t| t.can_start_stmt()) {
             self.parse_stmt();
+            self.eat_whitespace_or_line_feeds();
         }
         self.b.finish_node();
 
@@ -118,41 +143,198 @@ impl<'src> Parser<'src> {
     fn parse_block(&mut self) {
         self.b.start_node(Block.into());
         assert!(
-            self.eat() == Some(BeginKw),
+            self.eat() == BeginKw,
             "Block parsing must begin with `begin`"
         );
+        self.sync_token_stack.push(BeginKw);
         self.eat_whitespace_or_line_feeds();
 
         self.parse_block_scope();
 
         self.eat();
+        self.sync_token_stack.pop();
 
         self.b.finish_node();
         self.eat_whitespace_or_line_feeds();
     }
 
-    fn parse_stmt(&mut self) {
-        if self.peek_if(|t| t.can_start_expr()) {
-            self.parse_expr();
-        }
-        self.eat_whitespace_or_line_feeds();
+    fn parse_stmt_end(&mut self) {
+        self.eat_if(|t| t == LF || t == Semicolon);
     }
 
-    fn parse_expr(&mut self) {
+    fn parse_stmt(&mut self) {
+        if self.peek_if(|t| t.can_start_expr()) {
+            self.b.start_node(ExprStmt.into());
+            self.parse_expr(false);
+            self.eat_whitespace();
+            self.parse_stmt_end();
+            self.b.finish_node();
+        }
+    }
+
+    fn parse_expr(&mut self, in_parenthesis: bool) {
         debug_assert!(
-            self.peek().unwrap().can_start_expr(),
+            self.peek().can_start_expr(),
             "Must start with some token that can start an expression"
         );
 
-        match self.peek().unwrap() {
-            BeginKw => {
-                self.parse_block();
-            }
-            _ => {
-                todo!();
+        self.parse_expr_pratt(0, in_parenthesis, false);
+    }
+
+    fn parse_expr_pratt(
+        &mut self,
+        start_precedence: i32,
+        in_parenthesis: bool,
+        in_function_call: bool,
+    ) {
+        // This method uses pratt parsing
+
+        // This checkpoint wraps the whole left-hand side
+        let start = self.b.checkpoint();
+
+        {
+            // parse prefix expr
+            let tok = self.peek();
+            if let Some(bp) = prefix_binding_power(tok) {
+                self.b.start_node(UnaryExpr.into());
+                self.eat();
+                self.eat_whitespace_or_line_feeds();
+                self.parse_expr_pratt(bp, in_parenthesis, in_function_call);
+                self.b.finish_node();
+            } else {
+                self.eat_whitespace_in_parenthesis(in_parenthesis);
+                self.parse_primary_expr();
             }
         }
+        self.eat_whitespace_in_parenthesis(in_parenthesis);
 
-        self.eat_whitespace();
+        loop {
+            self.eat_whitespace_in_parenthesis(in_parenthesis);
+            if let Some(bp) = postfix_binding_power(self.peek()) {
+                if bp < start_precedence {
+                    break;
+                }
+
+                self.b.start_node_at(start, UnaryExpr.into());
+                self.eat();
+
+                self.b.finish_node();
+            } else if let Some((lbp, rbp)) =
+                infix_binding_power(self.peek()).map(|x| x.binding_power())
+            {
+                if lbp < start_precedence {
+                    break;
+                }
+                if self.peek() == LBracket {
+                    // subscript expr
+                    self.b.start_node_at(start, SubscriptExpr.into());
+                    self.eat();
+                    self.eat_whitespace_or_line_feeds();
+                    self.parse_expr_pratt(rbp, true, false);
+                    self.eat_whitespace_in_parenthesis(true);
+                    self.expect(RBracket);
+                    self.b.finish_node();
+                } else {
+                    self.b.start_node_at(start, BinaryExpr.into());
+                    self.eat();
+                    self.eat_whitespace_or_line_feeds();
+                    self.parse_expr_pratt(rbp, in_parenthesis, in_function_call);
+                    self.b.finish_node();
+                }
+            } else if self.peek().can_start_expr() && !in_function_call {
+                if FUNCTION_CALL_PRECEDENCE < start_precedence {
+                    break;
+                }
+                // function call
+                self.b.start_node_at(start, FunctionCallExpr.into());
+                self.eat_whitespace_in_parenthesis(in_parenthesis);
+
+                // parse function params
+                while self.peek().can_start_expr() {
+                    self.parse_expr_pratt(FUNCTION_CALL_PRECEDENCE, in_parenthesis, true);
+                    self.eat_whitespace_in_parenthesis(in_parenthesis)
+                }
+
+                self.b.finish_node();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn parse_primary_expr(&mut self) {
+        match self.peek() {
+            BeginKw => {
+                self.b.start_node(BlockExpr.into());
+                self.parse_block();
+                self.b.finish_node();
+            }
+            Int | Float | StringLiteral => {
+                self.b.start_node(LiteralExpr.into());
+                self.eat();
+                self.b.finish_node();
+            }
+            Ident => {
+                self.parse_name_or_namespace();
+            }
+            LParen => {
+                self.parse_paren_expr_or_tuple();
+            }
+            _ => {
+                todo!("got {:?}: `{}`", self.peek(), self.lexer.inner.remainder())
+            }
+        }
+    }
+
+    fn parse_name_or_namespace(&mut self) {
+        let ns_start = self.b.checkpoint();
+        debug_assert_eq!(
+            self.peek(),
+            Ident,
+            "name or namespace must start with an ident"
+        );
+        self.eat();
+
+        if self.peek_is(DoubleColon) {
+            self.b.start_node_at(ns_start, Namespace.into());
+            while self.try_eat_token(DoubleColon) {
+                self.expect(Ident);
+                // TODO: error reduction
+            }
+            self.b.finish_node();
+        } else {
+            self.b.start_node_at(ns_start, VarExpr.into());
+            self.b.finish_node();
+        }
+    }
+
+    fn parse_paren_expr_or_tuple(&mut self) {
+        let paren_start = self.b.checkpoint();
+        debug_assert_eq!(self.peek(), LParen, "Must start with left parenthesis");
+        self.eat();
+
+        self.parse_expr(true);
+        self.eat_whitespace_or_line_feeds();
+
+        if self.peek_is(Comma) {
+            self.b.start_node_at(paren_start, TupleLiteralExpr.into());
+            while self.try_eat_token(Comma) {
+                if self.try_eat_token(RParen) {
+                    break;
+                }
+                self.parse_expr(true);
+                self.eat_whitespace_or_line_feeds();
+            }
+            self.b.finish_node();
+        } else if self.try_eat_token(RParen) {
+            self.b.start_node_at(paren_start, ParenExpr.into());
+            self.b.finish_node();
+        } else {
+            todo!(
+                "Error: expect comma or parenthesis, got {:?}: `{}`",
+                self.peek(),
+                self.lexer.inner.remainder()
+            )
+        }
     }
 }
