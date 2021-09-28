@@ -148,6 +148,7 @@ pub enum SynTag {
     Namespace,
 
     // Literals
+    KeyValuePair,
     TupleLiteralExpr,
     ObjectLiteralExpr,
     ArrayLiteralExpr,

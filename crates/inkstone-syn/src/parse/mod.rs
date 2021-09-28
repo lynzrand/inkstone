@@ -339,10 +339,10 @@ impl<'src> Parser<'src> {
                 self.b.finish_node();
             }
             LBracket => {
-                todo!("Parse array literal");
+                self.parse_array_literal();
             }
             LBrace => {
-                todo!("Parse object literal");
+                self.parse_object_literal();
             }
             Ident => {
                 self.parse_name_or_namespace();
@@ -409,6 +409,72 @@ impl<'src> Parser<'src> {
                 self.lexer.inner.remainder()
             )
         }
+    }
+
+    fn parse_array_literal(&mut self) {
+        self.b.start_node(ArrayLiteralExpr.into());
+        self.expect(LBracket);
+        self.eat_whitespace_or_line_feeds();
+
+        if self.peek_if(|t| t.can_start_expr()) {
+            self.parse_expr(true);
+            self.eat_whitespace_or_line_feeds();
+            while self.peek_is(Comma) {
+                self.expect(Comma);
+                self.eat_whitespace_or_line_feeds();
+                self.parse_expr(true);
+                self.eat_whitespace_or_line_feeds();
+            }
+            self.try_eat_token(Comma);
+        }
+
+        self.eat_whitespace_or_line_feeds();
+        self.expect(RBracket);
+        self.b.finish_node();
+    }
+
+    fn parse_key_value_pair(&mut self, in_parenthesis: bool) {
+        // key: value
+        self.b.start_node(KeyValuePair.into());
+
+        self.b.start_node(Name.into());
+        self.eat_if(|t| t == StringLiteral || t == Ident || t == Symbol);
+        self.b.finish_node();
+
+        self.eat_whitespace_in_parenthesis(in_parenthesis);
+        self.expect(Colon);
+        self.eat_whitespace_in_parenthesis(in_parenthesis);
+
+        self.parse_expr(in_parenthesis);
+
+        self.b.finish_node();
+    }
+
+    fn parse_object_literal(&mut self) {
+        // {
+        //   key: value, ...
+        // }
+        self.b.start_node(ObjectLiteralExpr.into());
+        self.expect(LBrace);
+
+        self.eat_whitespace_or_line_feeds();
+
+        if self.peek_is(Ident) || self.peek_is(StringLiteral) || self.peek_is(Symbol) {
+            self.parse_key_value_pair(true);
+            self.eat_whitespace_or_line_feeds();
+            while self.peek_is(Comma) {
+                self.expect(Comma);
+                self.eat_whitespace_or_line_feeds();
+                self.parse_key_value_pair(true);
+                self.eat_whitespace_or_line_feeds();
+            }
+            self.try_eat_token(Comma);
+        }
+
+        self.eat_whitespace_or_line_feeds();
+
+        self.expect(RBrace);
+        self.b.finish_node();
     }
 
     fn parse_lambda(&mut self) {

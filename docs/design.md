@@ -120,6 +120,9 @@ LValue -> VarExpr | DotChildExpr | SubscriptExpr
 # AssignExpr -> nil
 AssignExpr -> LValue '=' Expr
 
+ReturnExpr -> 'return' Expr?
+BreakExpr -> 'break' Expr?
+
 Expr -> 
     | ParenExpr
     | UnaryExpr
@@ -131,6 +134,8 @@ Expr ->
     | LiteralExpr
     | IfExpr
     | BlockExpr
+    | ReturnExpr
+    | BreakExpr
 
 # BlockInnerExpr: if len(Stmt) > 0: (-> Stmt[-1]::Ty) else: (-> nil)
 BlockInnerExpr -> Stmt*
@@ -142,7 +147,7 @@ ExprStmt -> Expr
 
 LetStmt -> 'let' Ident '=' Expr
 
-StmtInner -> ExprStmt | UseStmt | FuncDef | ModuleDef | LetStmt
+StmtInner -> ExprStmt | UseStmt | FuncDef | ModuleDef | LetStmt 
 Stmt -> StmtInner (EOL | ';')
 
 
