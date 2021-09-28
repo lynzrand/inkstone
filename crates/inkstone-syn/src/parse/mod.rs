@@ -269,16 +269,25 @@ impl<'src> Parser<'src> {
                 self.parse_block();
                 self.b.finish_node();
             }
-            Int | Float | StringLiteral => {
+            Int | Float | StringLiteral | Symbol => {
                 self.b.start_node(LiteralExpr.into());
                 self.eat();
                 self.b.finish_node();
+            }
+            LBracket => {
+                todo!("Parse array literal");
+            }
+            LBrace => {
+                todo!("Parse object literal");
             }
             Ident => {
                 self.parse_name_or_namespace();
             }
             LParen => {
                 self.parse_paren_expr_or_tuple();
+            }
+            Backslash => {
+                self.parse_lambda();
             }
             _ => {
                 todo!("got {:?}: `{}`", self.peek(), self.lexer.inner.remainder())
@@ -336,5 +345,32 @@ impl<'src> Parser<'src> {
                 self.lexer.inner.remainder()
             )
         }
+    }
+
+    fn parse_lambda(&mut self) {
+        // \x -> body
+        self.b.start_node(LambdaExpr.into());
+        self.expect(Backslash);
+
+        self.parse_param_list();
+
+        self.expect(Arrow);
+        self.eat_whitespace_or_line_feeds();
+
+        self.b.start_node(FuncBody.into());
+        self.parse_expr(false);
+        self.b.finish_node();
+        self.b.finish_node();
+    }
+
+    fn parse_param_list(&mut self) {
+        self.b.start_node(FuncParamList.into());
+        while self.peek_is(Ident) {
+            self.b.start_node(FuncParam.into());
+            self.eat();
+            self.b.finish_node();
+            self.eat_whitespace_or_line_feeds();
+        }
+        self.b.finish_node();
     }
 }

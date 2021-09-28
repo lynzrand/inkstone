@@ -107,3 +107,15 @@ fn test_parse_expr() {
 
     eprintln!("{}", FormatTree(&result))
 }
+
+#[test]
+fn test_parse_lambda_expr() {
+    let input = r#"env :hello "hello world!" \-> print env"#;
+
+    let mut parser = Parser::new(input);
+    parser.parse_expr(false);
+
+    let (result, _) = parser.finish();
+
+    eprintln!("{}", FormatTree(&result))
+}

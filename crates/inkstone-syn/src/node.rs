@@ -183,6 +183,7 @@ pub enum SynTag {
     FuncDef,
     FuncParamList,
     FuncParam,
+    FuncBody,
 
     ModuleDef,
 
