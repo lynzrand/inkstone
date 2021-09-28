@@ -438,7 +438,12 @@ impl<'src> Parser<'src> {
         self.b.start_node(KeyValuePair.into());
 
         self.b.start_node(Name.into());
-        self.eat_if(|t| t == StringLiteral || t == Ident || t == Symbol);
+        if self
+            .eat_if(|t| t == StringLiteral || t == Ident || t == Symbol)
+            .is_none()
+        {
+            panic!("not key: {:?}", self.peek());
+        }
         self.b.finish_node();
 
         self.eat_whitespace_in_parenthesis(in_parenthesis);
@@ -465,10 +470,12 @@ impl<'src> Parser<'src> {
             while self.peek_is(Comma) {
                 self.expect(Comma);
                 self.eat_whitespace_or_line_feeds();
+                if !(self.peek_is(Ident) || self.peek_is(StringLiteral) || self.peek_is(Symbol)) {
+                    break;
+                }
                 self.parse_key_value_pair(true);
                 self.eat_whitespace_or_line_feeds();
             }
-            self.try_eat_token(Comma);
         }
 
         self.eat_whitespace_or_line_feeds();

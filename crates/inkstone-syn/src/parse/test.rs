@@ -140,3 +140,21 @@ def id x = \x -> x
 
     eprintln!("{}", FormatTree(&result))
 }
+
+#[test]
+fn test_parse_objects() {
+    let input = r#"
+let x = [1, 2+3, 5, 7, foo bar, baz]
+let y = {
+    foo: \x->x.foo,
+    "bar": baz bug,
+}
+    "#;
+
+    let mut parser = Parser::new(input);
+    parser.parse_root();
+
+    let (result, _) = parser.finish();
+
+    eprintln!("{}", FormatTree(&result))
+}
