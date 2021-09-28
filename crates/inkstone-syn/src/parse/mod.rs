@@ -297,14 +297,24 @@ impl<'src> Parser<'src> {
                     self.parse_expr_pratt(rbp, true, false);
                     self.eat_whitespace_in_parenthesis(true);
                     self.expect(RBracket);
-                    self.b.finish_node();
+                } else if self.peek() == Dot {
+                    // dot expr only accepts identifiers
+                    self.b.start_node_at(start, DotExpr.into());
+
+                    while self.try_eat_token(Dot) {
+                        self.eat_whitespace_or_line_feeds();
+                        if !self.expect(Ident) {
+                            panic!("todo expect ident")
+                        }
+                        self.eat_whitespace_in_parenthesis(in_parenthesis);
+                    }
                 } else {
                     self.b.start_node_at(start, BinaryExpr.into());
                     self.eat();
                     self.eat_whitespace_or_line_feeds();
                     self.parse_expr_pratt(rbp, in_parenthesis, in_function_call);
-                    self.b.finish_node();
                 }
+                self.b.finish_node();
             } else if self.peek().can_start_expr() && !in_function_call {
                 if FUNCTION_CALL_PRECEDENCE < start_precedence {
                     break;
