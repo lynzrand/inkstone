@@ -1,3 +1,4 @@
+mod error_report;
 mod pratt_util;
 mod tag_util;
 #[cfg(test)]
@@ -128,8 +129,33 @@ impl<'src> Parser<'src> {
         self.b.finish_node();
     }
 
+    fn parse_func_def(&mut self) {
+        // def name param1 params = body
+        self.b.start_node(FuncDef.into());
+        self.expect(DefKw);
+        self.eat_whitespace_or_line_feeds();
+
+        self.b.start_node(Name.into());
+        self.expect(Ident);
+        self.b.finish_node();
+
+        self.eat_whitespace_or_line_feeds();
+        self.parse_param_list();
+
+        self.eat_whitespace_or_line_feeds();
+        self.expect(Assign);
+        self.eat_whitespace_or_line_feeds();
+
+        self.parse_expr(false);
+
+        self.eat_whitespace();
+        self.parse_stmt_end();
+        self.b.finish_node();
+    }
+
     fn parse_block_scope(&mut self) {
         self.b.start_node(BlockScope.into());
+        self.eat_whitespace_or_line_feeds();
 
         while self.peek_if(|t| t.can_start_stmt()) {
             self.parse_stmt();
@@ -141,15 +167,18 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_block(&mut self) {
+        // begin
+        //   ...stmt
+        // end
         self.b.start_node(Block.into());
-        assert!(
-            self.eat() == BeginKw,
-            "Block parsing must begin with `begin`"
-        );
+        self.expect(BeginKw);
+
         self.sync_token_stack.push(BeginKw);
         self.eat_whitespace_or_line_feeds();
 
         self.parse_block_scope();
+
+        self.eat_whitespace_or_line_feeds();
 
         self.eat();
         self.sync_token_stack.pop();
@@ -158,24 +187,59 @@ impl<'src> Parser<'src> {
         self.eat_whitespace_or_line_feeds();
     }
 
+    fn parse_let_stmt(&mut self) {
+        // let x = expr
+
+        self.b.start_node(LetStmt.into());
+        self.expect(LetKw);
+        self.eat_whitespace_or_line_feeds();
+
+        self.b.start_node(Name.into());
+        self.expect(Ident);
+        self.b.finish_node();
+
+        self.eat_whitespace_or_line_feeds();
+        self.expect(Assign);
+        self.eat_whitespace_or_line_feeds();
+
+        self.parse_expr(false);
+
+        self.eat_whitespace();
+        self.parse_stmt_end();
+        self.b.finish_node();
+    }
+
     fn parse_stmt_end(&mut self) {
         self.eat_if(|t| t == LF || t == Semicolon);
     }
 
     fn parse_stmt(&mut self) {
-        if self.peek_if(|t| t.can_start_expr()) {
-            self.b.start_node(ExprStmt.into());
-            self.parse_expr(false);
-            self.eat_whitespace();
-            self.parse_stmt_end();
-            self.b.finish_node();
+        match self.peek() {
+            t if t.can_start_expr() => {
+                self.b.start_node(ExprStmt.into());
+                self.parse_expr(false);
+                self.eat_whitespace();
+                self.parse_stmt_end();
+                self.b.finish_node();
+            }
+            DefKw => {
+                self.parse_func_def();
+            }
+            LetKw => {
+                self.parse_let_stmt();
+            }
+            _ => {
+                panic!("unknown stmt, got {:?}", self.peek());
+            }
         }
     }
 
     fn parse_expr(&mut self, in_parenthesis: bool) {
         debug_assert!(
             self.peek().can_start_expr(),
-            "Must start with some token that can start an expression"
+            "Must start with some token that can start an expression, got {:?} @ {:?}",
+            self.peek(),
+            self.lexer.inner.remainder()
         );
 
         self.parse_expr_pratt(0, in_parenthesis, false);

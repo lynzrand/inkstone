@@ -140,7 +140,9 @@ BlockExpr -> 'begin' BlockInnerExpr 'end'
 
 ExprStmt -> Expr
 
-StmtInner -> ExprStmt | UseStmt | FuncDef | ModuleDef
+LetStmt -> 'let' Ident '=' Expr
+
+StmtInner -> ExprStmt | UseStmt | FuncDef | ModuleDef | LetStmt
 Stmt -> StmtInner (EOL | ';')
 
 

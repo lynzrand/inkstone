@@ -119,3 +119,24 @@ fn test_parse_lambda_expr() {
 
     eprintln!("{}", FormatTree(&result))
 }
+
+#[test]
+fn test_parse_let_stmts() {
+    let input = r#"
+let x = 1 + 2;
+let y = 3 + 4;
+
+def add a b = a + b
+def mul a b = begin
+    a * b
+end
+def id x = \x -> x
+    "#;
+
+    let mut parser = Parser::new(input);
+    parser.parse_root();
+
+    let (result, _) = parser.finish();
+
+    eprintln!("{}", FormatTree(&result))
+}
