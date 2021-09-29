@@ -1,0 +1,23 @@
+FunctionCallExpr@0..39
+  VarExpr@0..3
+    Ident@0..3 "env"
+  WS@3..4 " "
+  LiteralExpr@4..10
+    Symbol@4..10 ":hello"
+  WS@10..11 " "
+  LiteralExpr@11..25
+    StringLiteral@11..25 "\"hello world!\""
+  WS@25..26 " "
+  LambdaExpr@26..39
+    Backslash@26..27 "\\"
+    FuncParamList@27..27
+    Arrow@27..29 "->"
+    WS@29..30 " "
+    FuncBody@30..39
+      FunctionCallExpr@30..39
+        VarExpr@30..35
+          Ident@30..35 "print"
+        WS@35..36 " "
+        VarExpr@36..39
+          Ident@36..39 "env"
+

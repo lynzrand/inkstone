@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 
+use expect_test::{expect_file, ExpectFile};
 use rowan::SyntaxNode;
 
 use crate::node::{InkstoneLang, SynTag};
@@ -8,14 +9,8 @@ use crate::Lexer;
 
 use super::Parser;
 
-fn assert_tree_matches<R: Borrow<SyntaxNode<InkstoneLang>>>(r: R, tree: &str) {
-    let result_formatted = format!("{}", FormatTree(r.borrow()));
-    let actual = result_formatted.trim();
-    let expected = tree.trim();
-    if actual != expected {
-        let diff = colored_diff::PrettyDifference { expected, actual };
-        panic!("tree mismatch (< expected / > actual):\n{}", diff);
-    }
+fn assert_tree_matches<R: Borrow<SyntaxNode<InkstoneLang>>>(r: R, tree: ExpectFile) {
+    tree.assert_debug_eq(r.borrow());
 }
 
 #[test]
@@ -27,14 +22,7 @@ fn test_parse_empty() {
 
     let (result, _) = parser.finish();
 
-    assert_tree_matches(
-        result,
-        r#"
-Root
-    WS " "
-    BlockScope
-        "#,
-    );
+    assert_tree_matches(result, expect_file!["./test_data/parse_empty.txt"]);
 }
 
 #[test]
@@ -49,51 +37,12 @@ end
     "
     .trim();
 
-    {
-        use SynTag::*;
-        let lexer = Lexer::new(input);
-        let res = lexer.collect::<Vec<_>>();
-        pretty_assertions::assert_eq!(
-            res,
-            vec![
-                BeginKw, LF, WS, BeginKw, LF, WS, BeginKw, LF, WS, EndKw, LF, WS, EndKw, LF, EndKw
-            ]
-        );
-    }
-
     let mut parser = Parser::new(input);
     parser.parse_root();
 
     let (result, _) = parser.finish();
 
-    assert_tree_matches(
-        result,
-        r#"
-Root
-    BlockScope
-        Block
-            BeginKw "begin"
-            LF "\n"
-            WS "    "
-            BlockScope
-                Block
-                    BeginKw "begin"
-                    LF "\n"
-                    WS "        "
-                    BlockScope
-                        Block
-                            BeginKw "begin"
-                            LF "\n"
-                            WS "        "
-                            BlockScope
-                            EndKw "end"
-                        LF "\n"
-                        WS "    "
-                    EndKw "end"
-                LF "\n"
-            EndKw "end"
-        "#,
-    );
+    assert_tree_matches(result, expect_file!["./test_data/parse_blocks.txt"]);
 }
 
 #[test]
@@ -105,7 +54,7 @@ fn test_parse_expr() {
 
     let (result, _) = parser.finish();
 
-    eprintln!("{}", FormatTree(&result))
+    assert_tree_matches(result, expect_file!["./test_data/parse_expr.txt"]);
 }
 
 #[test]
@@ -117,7 +66,7 @@ fn test_parse_lambda_expr() {
 
     let (result, _) = parser.finish();
 
-    eprintln!("{}", FormatTree(&result))
+    assert_tree_matches(result, expect_file!["./test_data/parse_lambda_expr.txt"]);
 }
 
 #[test]
@@ -138,7 +87,7 @@ def id x = \x -> x
 
     let (result, _) = parser.finish();
 
-    eprintln!("{}", FormatTree(&result))
+    assert_tree_matches(result, expect_file!["./test_data/parse_let_stmts.txt"]);
 }
 
 #[test]
@@ -156,5 +105,5 @@ let y = {
 
     let (result, _) = parser.finish();
 
-    eprintln!("{}", FormatTree(&result))
+    assert_tree_matches(result, expect_file!["./test_data/parse_objects.txt"]);
 }

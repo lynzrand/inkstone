@@ -13,5 +13,6 @@ rowan = "0.14.0"
 scopeguard = "1.1"
 
 [dev-dependencies]
-pretty_assertions = "0.7"
+pretty_assertions = "1"
 colored-diff = "0.2.2"
+expect-test = "1.1"
