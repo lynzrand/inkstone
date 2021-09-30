@@ -363,10 +363,75 @@ impl<'src> Parser<'src> {
             Backslash => {
                 self.parse_lambda();
             }
+            IfKw => {
+                self.parse_if_expr();
+            }
             _ => {
                 todo!("got {:?}: `{}`", self.peek(), self.lexer.inner.remainder())
             }
         }
+    }
+
+    fn parse_if_expr(&mut self) {
+        // if expr; if_block; else else_block; end
+        //
+        // -or-
+        //
+        // if expr
+        //   if_block
+        // else
+        //   else_block
+        // end
+
+        self.b.start_node(IfExpr.into());
+        self.expect(IfKw);
+        self.eat_whitespace_or_line_feeds();
+
+        self.parse_if_branch();
+
+        self.eat_whitespace_or_line_feeds();
+
+        loop {
+            match self.peek() {
+                ElseKw => {
+                    // else branch
+                    self.eat();
+                    self.eat_whitespace_or_line_feeds();
+
+                    if self.try_eat_token(IfKw) {
+                        self.eat_whitespace_or_line_feeds();
+                        self.parse_if_branch();
+                        self.eat_whitespace_or_line_feeds();
+                    } else {
+                        self.eat_whitespace_or_line_feeds();
+                        self.b.start_node(IfBranch.into());
+                        self.parse_block_scope();
+                        self.b.finish_node();
+                        self.eat_whitespace_or_line_feeds();
+                    }
+                }
+                EndKw => {
+                    self.eat();
+                    break;
+                }
+                others => todo!("Unexpected token in if branch: {:?}", others),
+            }
+        }
+
+        self.b.finish_node();
+    }
+
+    fn parse_if_branch(&mut self) {
+        self.b.start_node(IfBranch.into());
+        {
+            self.b.start_node(Condition.into());
+            self.parse_expr(false);
+            self.eat_whitespace_or_line_feeds();
+            self.parse_stmt_end();
+            self.b.finish_node();
+        }
+        self.parse_block_scope();
+        self.b.finish_node();
     }
 
     fn parse_name_or_namespace(&mut self) {
@@ -395,6 +460,15 @@ impl<'src> Parser<'src> {
         let paren_start = self.b.checkpoint();
         debug_assert_eq!(self.peek(), LParen, "Must start with left parenthesis");
         self.eat();
+
+        self.eat_whitespace_or_line_feeds();
+
+        if self.try_eat_token(RParen) {
+            // Empty tuple
+            self.b.start_node_at(paren_start, TupleLiteralExpr.into());
+            self.b.finish_node();
+            return;
+        }
 
         self.parse_expr(true);
         self.eat_whitespace_or_line_feeds();

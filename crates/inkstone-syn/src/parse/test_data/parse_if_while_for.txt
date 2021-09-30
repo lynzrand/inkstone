@@ -1,0 +1,134 @@
+Root@0..163
+  LF@0..1 "\n"
+  BlockScope@1..163
+    LetStmt@1..49
+      LetKw@1..4 "let"
+      WS@4..5 " "
+      Name@5..6
+        Ident@5..6 "x"
+      WS@6..7 " "
+      Assign@7..8 "="
+      WS@8..9 " "
+      IfExpr@9..48
+        IfKw@9..11 "if"
+        WS@11..12 " "
+        IfBranch@12..31
+          Condition@12..16
+            VarExpr@12..15
+              Ident@12..15 "foo"
+            Semicolon@15..16 ";"
+          BlockScope@16..31
+            WS@16..17 " "
+            ExprStmt@17..30
+              FunctionCallExpr@17..29
+                VarExpr@17..19
+                  Ident@17..19 "do"
+                WS@19..20 " "
+                VarExpr@20..29
+                  Ident@20..29 "something"
+              Semicolon@29..30 ";"
+            WS@30..31 " "
+        ElseKw@31..35 "else"
+        WS@35..36 " "
+        IfBranch@36..45
+          BlockScope@36..45
+            ExprStmt@36..44
+              FunctionCallExpr@36..43
+                VarExpr@36..40
+                  Ident@36..40 "give"
+                WS@40..41 " "
+                VarExpr@41..43
+                  Ident@41..43 "up"
+              Semicolon@43..44 ";"
+            WS@44..45 " "
+        EndKw@45..48 "end"
+      LF@48..49 "\n"
+    LF@49..50 "\n"
+    ExprStmt@50..158
+      IfExpr@50..157
+        IfKw@50..52 "if"
+        WS@52..53 " "
+        IfBranch@53..102
+          Condition@53..91
+            BinaryExpr@53..86
+              FunctionCallExpr@53..67
+                DotExpr@53..64
+                  VarExpr@53..57
+                    Ident@53..57 "Date"
+                  Dot@57..58 "."
+                  Ident@58..63 "today"
+                  WS@63..64 " "
+                TupleLiteralExpr@64..66
+                  LParen@64..65 "("
+                  RParen@65..66 ")"
+                WS@66..67 " "
+              Eq@67..69 "=="
+              WS@69..70 " "
+              ParenExpr@70..86
+                LParen@70..71 "("
+                FunctionCallExpr@71..85
+                  VarExpr@71..75
+                    Ident@71..75 "Date"
+                  WS@75..76 " "
+                  LiteralExpr@76..80
+                    Int@76..80 "2021"
+                  WS@80..81 " "
+                  LiteralExpr@81..82
+                    Int@81..82 "9"
+                  WS@82..83 " "
+                  LiteralExpr@83..85
+                    Int@83..85 "30"
+                RParen@85..86 ")"
+            LF@86..87 "\n"
+            WS@87..91 "    "
+          BlockScope@91..102
+            ExprStmt@91..102
+              FunctionCallExpr@91..101
+                VarExpr@91..98
+                  Ident@91..98 "wake_up"
+                WS@98..99 " "
+                VarExpr@99..101
+                  Ident@99..101 "me"
+              LF@101..102 "\n"
+        ElseKw@102..106 "else"
+        WS@106..107 " "
+        IfKw@107..109 "if"
+        WS@109..110 " "
+        IfBranch@110..144
+          Condition@110..125
+            BinaryExpr@110..120
+              BinaryExpr@110..116
+                LiteralExpr@110..111
+                  Int@110..111 "2"
+                WS@111..112 " "
+                Add@112..113 "+"
+                WS@113..114 " "
+                LiteralExpr@114..115
+                  Int@114..115 "2"
+                WS@115..116 " "
+              Eq@116..118 "=="
+              WS@118..119 " "
+              LiteralExpr@119..120
+                Int@119..120 "5"
+            LF@120..121 "\n"
+            WS@121..125 "    "
+          BlockScope@125..144
+            ExprStmt@125..144
+              FunctionCallExpr@125..143
+                VarExpr@125..130
+                  Ident@125..130 "print"
+                WS@130..131 " "
+                LiteralExpr@131..143
+                  StringLiteral@131..143 "\"It\'s 1984!\""
+              LF@143..144 "\n"
+        ElseKw@144..148 "else"
+        LF@148..149 "\n"
+        WS@149..153 "    "
+        LF@153..154 "\n"
+        IfBranch@154..154
+          BlockScope@154..154
+        EndKw@154..157 "end"
+      LF@157..158 "\n"
+    LF@158..159 "\n"
+    WS@159..163 "    "
+

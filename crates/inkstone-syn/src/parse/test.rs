@@ -3,9 +3,7 @@ use std::borrow::Borrow;
 use expect_test::{expect_file, ExpectFile};
 use rowan::SyntaxNode;
 
-use crate::node::{InkstoneLang, SynTag};
-use crate::parse::tag_util::FormatTree;
-use crate::Lexer;
+use crate::node::InkstoneLang;
 
 use super::Parser;
 
@@ -106,4 +104,27 @@ let y = {
     let (result, _) = parser.finish();
 
     assert_tree_matches(result, expect_file!["./test_data/parse_objects.txt"]);
+}
+
+#[test]
+fn test_parse_if_while_for() {
+    let input = r#"
+let x = if foo; do something; else give up; end
+
+if Date.today () == (Date 2021 9 30)
+    wake_up me
+else if 2 + 2 == 5
+    print "It's 1984!"
+else
+    
+end
+
+    "#;
+
+    let mut parser = Parser::new(input);
+    parser.parse_root();
+
+    let (result, _) = parser.finish();
+
+    assert_tree_matches(result, expect_file!["./test_data/parse_if_while_for.txt"]);
 }

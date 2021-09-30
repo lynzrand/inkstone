@@ -153,6 +153,11 @@ pub enum SynTag {
     ObjectLiteralExpr,
     ArrayLiteralExpr,
 
+    // Control flow
+    IfBranch,
+    Condition,
+    Binding,
+
     // Expressions
     ParenExpr,
     UnaryExpr,
@@ -162,10 +167,24 @@ pub enum SynTag {
     DotExpr,
     SubscriptExpr,
     LiteralExpr,
+
+    // (:IfExpr
+    //        (:IfBranch (:Condition (:Expr ...)) (:BlockScope ...)) -- If/ElseIf block
+    //        (:IfBranch (:BlockScope ...))) -- Else block
     IfExpr,
+    // (:WhileLoopExpr
+    //                (:Condition (:Expr ...)) -- While condition
+    //                (:BlockScope ...)) -- While body
     WhileLoopExpr,
+    // (:ForLoopExpr
+    //              (:Condition (:Expr ...) (:Binding ...)) -- For condition
+    //              (:BlockScope ...)) -- For body
     ForLoopExpr,
+    // (:BlockExpr (:Block (:BlockScope ...)))
     BlockExpr,
+    // (:LambdaExpr
+    //            (:FuncParamList (:FuncParam (:Name :Ident)) ...) -- Parameters
+    //            (:Expr ...)) -- Body
     LambdaExpr,
 
     Expr,
