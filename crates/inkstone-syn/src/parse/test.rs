@@ -111,7 +111,7 @@ fn test_parse_if_while_for() {
     let input = r#"
 let x = if foo; do something; else give up; end
 
-if Date.today () == (Date 2021 9 30)
+if (Date.today ()) == (Date 2021 9 30)
     wake_up me
 else if 2 + 2 == 5
     print "It's 1984!"
