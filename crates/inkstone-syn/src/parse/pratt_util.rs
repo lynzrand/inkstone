@@ -2,8 +2,6 @@
 //!
 //! This module contains utilities for pratt-parsing Inkstone's expressions.
 
-use std::ops::BitXor;
-
 use crate::node::SynTag;
 
 /*
@@ -83,4 +81,4 @@ pub fn infix_binding_power(op: SynTag) -> Option<Infix> {
     }
 }
 
-pub const FUNCTION_CALL_PRECEDENCE: i32 = 100;
+pub const FUNCTION_CALL_PRECEDENCE: i32 = 110;

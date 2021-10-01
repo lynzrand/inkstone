@@ -324,7 +324,10 @@ impl<'src> Parser<'src> {
                 self.eat_whitespace_in_parenthesis(in_parenthesis);
 
                 // parse function params
-                while self.peek().can_start_expr() {
+                while self.peek().can_start_expr()
+                    && (prefix_binding_power(self.peek())
+                        .map_or(true, |p| p > FUNCTION_CALL_PRECEDENCE))
+                {
                     self.parse_expr_pratt(FUNCTION_CALL_PRECEDENCE, in_parenthesis, true);
                     self.eat_whitespace_in_parenthesis(in_parenthesis)
                 }

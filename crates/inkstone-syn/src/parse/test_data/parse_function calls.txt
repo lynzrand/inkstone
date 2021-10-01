@@ -1,0 +1,87 @@
+Root@0..71
+  LF@0..1 "\n"
+  BlockScope@1..71
+    ExprStmt@1..19
+      BinaryExpr@1..18
+        FunctionCallExpr@1..9
+          VarExpr@1..4
+            Ident@1..4 "foo"
+          WS@4..5 " "
+          VarExpr@5..8
+            Ident@5..8 "bar"
+          WS@8..9 " "
+        Add@9..10 "+"
+        WS@10..11 " "
+        FunctionCallExpr@11..18
+          VarExpr@11..14
+            Ident@11..14 "baz"
+          WS@14..15 " "
+          VarExpr@15..18
+            Ident@15..18 "qux"
+      LF@18..19 "\n"
+    ExprStmt@19..33
+      BinaryExpr@19..32
+        FunctionCallExpr@19..25
+          VarExpr@19..22
+            Ident@19..22 "foo"
+          WS@22..23 " "
+          LiteralExpr@23..24
+            Int@23..24 "1"
+          WS@24..25 " "
+        Add@25..26 "+"
+        WS@26..27 " "
+        BinaryExpr@27..32
+          LiteralExpr@27..28
+            Int@27..28 "2"
+          WS@28..29 " "
+          Mul@29..30 "*"
+          WS@30..31 " "
+          LiteralExpr@31..32
+            Int@31..32 "3"
+      LF@32..33 "\n"
+    ExprStmt@33..45
+      FunctionCallExpr@33..44
+        VarExpr@33..36
+          Ident@33..36 "foo"
+        WS@36..37 " "
+        ParenExpr@37..44
+          LParen@37..38 "("
+          BinaryExpr@38..43
+            LiteralExpr@38..39
+              Int@38..39 "1"
+            WS@39..40 " "
+            Add@40..41 "+"
+            WS@41..42 " "
+            LiteralExpr@42..43
+              Int@42..43 "2"
+          RParen@43..44 ")"
+      LF@44..45 "\n"
+    ExprStmt@45..67
+      BinaryExpr@45..66
+        BinaryExpr@45..63
+          FunctionCallExpr@45..59
+            VarExpr@45..48
+              Ident@45..48 "foo"
+            WS@48..49 " "
+            ParenExpr@49..58
+              LParen@49..50 "("
+              FunctionCallExpr@50..57
+                VarExpr@50..53
+                  Ident@50..53 "bar"
+                WS@53..54 " "
+                VarExpr@54..57
+                  Ident@54..57 "baz"
+              RParen@57..58 ")"
+            WS@58..59 " "
+          Mul@59..60 "*"
+          WS@60..61 " "
+          LiteralExpr@61..62
+            Int@61..62 "3"
+          WS@62..63 " "
+        Add@63..64 "+"
+        WS@64..65 " "
+        LiteralExpr@65..66
+          Int@65..66 "2"
+      LF@66..67 "\n"
+    WS@67..71 "    "
+

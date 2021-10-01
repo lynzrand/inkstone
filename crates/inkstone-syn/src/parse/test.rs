@@ -56,6 +56,23 @@ fn test_parse_expr() {
 }
 
 #[test]
+fn test_parse_function_calls() {
+    let input = r"
+foo bar + baz qux
+foo 1 + 2 * 3
+foo (1 + 2)
+foo (bar baz) * 3 + 2
+    ";
+
+    let mut parser = Parser::new(input);
+    parser.parse_root();
+
+    let (result, _) = parser.finish();
+
+    assert_tree_matches(result, expect_file!["./test_data/parse_function calls.txt"]);
+}
+
+#[test]
 fn test_parse_lambda_expr() {
     let input = r#"env :hello "hello world!" \-> print env"#;
 
