@@ -35,6 +35,8 @@ pub enum SynTag {
     ElseKw,
     #[token("while")]
     WhileKw,
+    #[token("match")]
+    MatchKw,
     #[token("for")]
     ForKw,
     #[token("in")]

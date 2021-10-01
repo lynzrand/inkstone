@@ -135,8 +135,7 @@ else if 2 + 2 == 5
 else
     
 end
-
-    "#;
+"#;
 
     let mut parser = Parser::new(input);
     parser.parse_root();
@@ -144,4 +143,21 @@ end
     let (result, _) = parser.finish();
 
     assert_tree_matches(result, expect_file!["./test_data/parse_if_while_for.txt"]);
+}
+
+#[test]
+fn test_parse_weird_exprs() {
+    let input = r#"
+let foo = \x -> x**2 3 4 5
+def pow x y = begin
+    
+end
+    "#;
+
+    let mut parser = Parser::new(input);
+    parser.parse_root();
+
+    let (result, _) = parser.finish();
+
+    assert_tree_matches(result, expect_file!["./test_data/parse_weird_exprs.txt"]);
 }

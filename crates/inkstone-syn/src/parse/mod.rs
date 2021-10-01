@@ -369,6 +369,15 @@ impl<'src> Parser<'src> {
             IfKw => {
                 self.parse_if_expr();
             }
+            WhileKw => {
+                todo!("parse while loop")
+            }
+            ForKw => {
+                todo!("parse for loop")
+            }
+            MatchKw => {
+                todo!("parse pattern matching")
+            }
             _ => {
                 todo!("got {:?}: `{}`", self.peek(), self.lexer.inner.remainder())
             }
