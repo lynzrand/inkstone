@@ -198,6 +198,9 @@ impl<ReturnTy, Params...> Fn(Params...) for Closure<ReturnTy, Params...> {
 }
 ```
 
-## Continuations
+## Continuations and Coroutines
 
 
+## Iterators and other interfaces
+
+TODO: How to design interfaces in a 

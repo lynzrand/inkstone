@@ -60,6 +60,6 @@ def ending_2 env = begin
     std::task::yield
 end
 
-let env = (new_env)
+let env = new_env ()
 game_start env
 ```
