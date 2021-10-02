@@ -135,6 +135,17 @@ else if 2 + 2 == 5
 else
     
 end
+
+let y = while true
+    for z in w
+        if x > 0
+            break 12345
+        end
+    end
+    if w == 5
+        break
+    end
+end
 "#;
 
     let mut parser = Parser::new(input);

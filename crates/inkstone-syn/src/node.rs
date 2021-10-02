@@ -35,6 +35,10 @@ pub enum SynTag {
     ElseKw,
     #[token("while")]
     WhileKw,
+    #[token("break")]
+    BreakKw,
+    #[token("return")]
+    ReturnKw,
     #[token("match")]
     MatchKw,
     #[token("for")]
@@ -51,6 +55,11 @@ pub enum SynTag {
     #[token("not")]
     NotKw,
 
+    #[token("true")]
+    TrueKw,
+    #[token("false")]
+    FalseKw,
+
     // === Identifiers ====
     #[regex(r"[a-zA-Z_][0-9a-zA-Z_?!]*")]
     Ident,
@@ -64,7 +73,7 @@ pub enum SynTag {
     Float,
 
     /// An RFC8259-compliant string. Invalid cases are handled afterward.
-    #[regex(r#""(([^\r\n\\$"]|\\.)*)""#)]
+    #[regex(r#""(([^\r\n\\"]|\\.)*)"|'(([^\r\n\\']|\\.)*)'"#)]
     StringLiteral,
     // #[regex(r#""([^\r\n\\$"]|\\.)*\$"#)]
     // InterpolatedStringStart,
@@ -170,6 +179,10 @@ pub enum SynTag {
     SubscriptExpr,
     LiteralExpr,
 
+    // (:BreakExpr (:Expr ...)?)
+    BreakExpr,
+    // (:ReturnExpr (:Expr ...)?)
+    ReturnExpr,
     // (:IfExpr
     //        (:IfBranch (:Condition (:Expr ...)) (:BlockScope ...)) -- If/ElseIf block
     //        (:IfBranch (:BlockScope ...))) -- Else block

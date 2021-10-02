@@ -1,0 +1,63 @@
+Root@0..61
+  LF@0..1 "\n"
+  BlockScope@1..61
+    LetStmt@1..28
+      LetKw@1..4 "let"
+      WS@4..5 " "
+      Name@5..8
+        Ident@5..8 "foo"
+      WS@8..9 " "
+      Assign@9..10 "="
+      WS@10..11 " "
+      LambdaExpr@11..27
+        Backslash@11..12 "\\"
+        FuncParamList@12..14
+          FuncParam@12..13
+            Ident@12..13 "x"
+          WS@13..14 " "
+        Arrow@14..16 "->"
+        WS@16..17 " "
+        FuncBody@17..27
+          BinaryExpr@17..27
+            VarExpr@17..18
+              Ident@17..18 "x"
+            Pow@18..20 "**"
+            FunctionCallExpr@20..27
+              LiteralExpr@20..21
+                Int@20..21 "2"
+              WS@21..22 " "
+              LiteralExpr@22..23
+                Int@22..23 "3"
+              WS@23..24 " "
+              LiteralExpr@24..25
+                Int@24..25 "4"
+              WS@25..26 " "
+              LiteralExpr@26..27
+                Int@26..27 "5"
+      LF@27..28 "\n"
+    FuncDef@28..61
+      DefKw@28..31 "def"
+      WS@31..32 " "
+      Name@32..35
+        Ident@32..35 "pow"
+      WS@35..36 " "
+      FuncParamList@36..40
+        FuncParam@36..37
+          Ident@36..37 "x"
+        WS@37..38 " "
+        FuncParam@38..39
+          Ident@38..39 "y"
+        WS@39..40 " "
+      Assign@40..41 "="
+      WS@41..42 " "
+      BlockExpr@42..61
+        Block@42..56
+          BeginKw@42..47 "begin"
+          LF@47..48 "\n"
+          WS@48..52 "    "
+          LF@52..53 "\n"
+          BlockScope@53..53
+          EndKw@53..56 "end"
+        LF@56..57 "\n"
+        WS@57..61 "    "
+

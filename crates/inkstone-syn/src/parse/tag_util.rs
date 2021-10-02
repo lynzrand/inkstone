@@ -21,12 +21,12 @@ impl SynTag {
         matches!(
             self,
             // keywords
-            BeginKw | IfKw | WhileKw | ForKw
+            BeginKw | IfKw | WhileKw | ForKw | BreakKw | ReturnKw
             // expressions
             | Add | Sub | Amp | Backslash
             // literals
             | Ident | Symbol | Int | Float
-            | StringLiteral
+            | StringLiteral | TrueKw | FalseKw
             // | InterpolatedStringStart
             | LParen | LBracket | LBrace
         )

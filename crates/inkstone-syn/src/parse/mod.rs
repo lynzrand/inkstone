@@ -346,7 +346,7 @@ impl<'src> Parser<'src> {
                 self.parse_block();
                 self.b.finish_node();
             }
-            Int | Float | StringLiteral | Symbol => {
+            Int | Float | StringLiteral | Symbol | TrueKw | FalseKw => {
                 self.b.start_node(LiteralExpr.into());
                 self.eat();
                 self.b.finish_node();
@@ -370,13 +370,19 @@ impl<'src> Parser<'src> {
                 self.parse_if_expr();
             }
             WhileKw => {
-                todo!("parse while loop")
+                self.parse_while_expr();
             }
             ForKw => {
-                todo!("parse for loop")
+                self.parse_for_expr();
             }
             MatchKw => {
                 todo!("parse pattern matching")
+            }
+            BreakKw => {
+                self.parse_break_expr();
+            }
+            ReturnKw => {
+                self.parse_return_expr();
             }
             _ => {
                 todo!("got {:?}: `{}`", self.peek(), self.lexer.inner.remainder())
@@ -413,14 +419,13 @@ impl<'src> Parser<'src> {
                     if self.try_eat_token(IfKw) {
                         self.eat_whitespace_or_line_feeds();
                         self.parse_if_branch();
-                        self.eat_whitespace_or_line_feeds();
                     } else {
                         self.eat_whitespace_or_line_feeds();
                         self.b.start_node(IfBranch.into());
                         self.parse_block_scope();
                         self.b.finish_node();
-                        self.eat_whitespace_or_line_feeds();
                     }
+                    self.eat_whitespace_or_line_feeds();
                 }
                 EndKw => {
                     self.eat();
@@ -443,6 +448,84 @@ impl<'src> Parser<'src> {
             self.b.finish_node();
         }
         self.parse_block_scope();
+        self.b.finish_node();
+    }
+
+    fn parse_while_expr(&mut self) {
+        // while cond
+        //   body
+        // end
+
+        self.b.start_node(WhileLoopExpr.into());
+        self.expect(WhileKw);
+        self.eat_whitespace_or_line_feeds();
+
+        self.b.start_node(Condition.into());
+        self.parse_expr(false);
+        self.b.finish_node();
+
+        self.eat_whitespace();
+        self.parse_stmt_end();
+
+        self.parse_block_scope();
+
+        self.eat_whitespace_or_line_feeds();
+        self.expect(EndKw);
+        self.b.finish_node();
+    }
+
+    fn parse_for_expr(&mut self) {
+        // for bind in val
+        //   body
+        // end
+
+        self.b.start_node(ForLoopExpr.into());
+        self.expect(ForKw);
+        self.eat_whitespace_or_line_feeds();
+
+        self.b.start_node(Condition.into());
+        self.parse_binding_expr();
+
+        self.eat_whitespace_or_line_feeds();
+        self.expect(InKw);
+        self.eat_whitespace_or_line_feeds();
+
+        self.parse_expr(false);
+        self.b.finish_node();
+
+        self.eat_whitespace();
+        self.parse_stmt_end();
+
+        self.parse_block_scope();
+
+        self.eat_whitespace_or_line_feeds();
+        self.expect(EndKw);
+        self.b.finish_node();
+    }
+
+    fn parse_binding_expr(&mut self) {
+        self.b.start_node(Binding.into());
+        self.expect(Ident);
+        self.b.finish_node();
+    }
+
+    fn parse_break_expr(&mut self) {
+        self.b.start_node(BreakExpr.into());
+        self.expect(BreakKw);
+        self.eat_whitespace();
+        if self.peek().can_start_expr() {
+            self.parse_expr(false);
+        }
+        self.b.finish_node();
+    }
+
+    fn parse_return_expr(&mut self) {
+        self.b.start_node(ReturnExpr.into());
+        self.expect(ReturnKw);
+        self.eat_whitespace();
+        if self.peek().can_start_expr() {
+            self.parse_expr(false);
+        }
         self.b.finish_node();
     }
 

@@ -1,6 +1,6 @@
-Root@0..165
+Root@0..296
   LF@0..1 "\n"
-  BlockScope@1..165
+  BlockScope@1..296
     LetStmt@1..49
       LetKw@1..4 "let"
       WS@4..5 " "
@@ -122,7 +122,7 @@ Root@0..165
                   Ident@127..132 "print"
                 WS@132..133 " "
                 LiteralExpr@133..145
-                  StringLiteral@133..145 "\"It\'s 1984!\""
+                  StringLiteral@133..145 "\"It's 1984!\""
               LF@145..146 "\n"
         ElseKw@146..150 "else"
         LF@150..151 "\n"
@@ -133,5 +133,93 @@ Root@0..165
         EndKw@156..159 "end"
       LF@159..160 "\n"
     LF@160..161 "\n"
-    WS@161..165 "    "
+    LetStmt@161..296
+      LetKw@161..164 "let"
+      WS@164..165 " "
+      Name@165..166
+        Ident@165..166 "y"
+      WS@166..167 " "
+      Assign@167..168 "="
+      WS@168..169 " "
+      WhileLoopExpr@169..295
+        WhileKw@169..174 "while"
+        WS@174..175 " "
+        Condition@175..179
+          LiteralExpr@175..179
+            TrueKw@175..179 "true"
+        LF@179..180 "\n"
+        BlockScope@180..292
+          WS@180..184 "    "
+          ExprStmt@184..256
+            ForLoopExpr@184..255
+              ForKw@184..187 "for"
+              WS@187..188 " "
+              Condition@188..194
+                Binding@188..189
+                  Ident@188..189 "z"
+                WS@189..190 " "
+                InKw@190..192 "in"
+                WS@192..193 " "
+                VarExpr@193..194
+                  Ident@193..194 "w"
+              LF@194..195 "\n"
+              BlockScope@195..252
+                WS@195..203 "        "
+                ExprStmt@203..248
+                  IfExpr@203..247
+                    IfKw@203..205 "if"
+                    WS@205..206 " "
+                    IfBranch@206..244
+                      Condition@206..224
+                        BinaryExpr@206..211
+                          VarExpr@206..207
+                            Ident@206..207 "x"
+                          WS@207..208 " "
+                          Gt@208..209 ">"
+                          WS@209..210 " "
+                          LiteralExpr@210..211
+                            Int@210..211 "0"
+                        LF@211..212 "\n"
+                        WS@212..224 "            "
+                      BlockScope@224..244
+                        ExprStmt@224..236
+                          BreakExpr@224..235
+                            BreakKw@224..229 "break"
+                            WS@229..230 " "
+                            LiteralExpr@230..235
+                              Int@230..235 "12345"
+                          LF@235..236 "\n"
+                        WS@236..244 "        "
+                    EndKw@244..247 "end"
+                  LF@247..248 "\n"
+                WS@248..252 "    "
+              EndKw@252..255 "end"
+            LF@255..256 "\n"
+          WS@256..260 "    "
+          ExprStmt@260..292
+            IfExpr@260..291
+              IfKw@260..262 "if"
+              WS@262..263 " "
+              IfBranch@263..288
+                Condition@263..278
+                  BinaryExpr@263..269
+                    VarExpr@263..264
+                      Ident@263..264 "w"
+                    WS@264..265 " "
+                    Eq@265..267 "=="
+                    WS@267..268 " "
+                    LiteralExpr@268..269
+                      Int@268..269 "5"
+                  LF@269..270 "\n"
+                  WS@270..278 "        "
+                BlockScope@278..288
+                  ExprStmt@278..284
+                    BreakExpr@278..283
+                      BreakKw@278..283 "break"
+                    LF@283..284 "\n"
+                  WS@284..288 "    "
+              EndKw@288..291 "end"
+            LF@291..292 "\n"
+        EndKw@292..295 "end"
+      LF@295..296 "\n"
 
