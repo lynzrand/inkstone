@@ -53,13 +53,16 @@ impl SynTag {
         )
     }
 
-    pub fn is_expr_parsing_synchronization_token(self) -> bool {
-        self.is_stmt_parsing_synchronization_token()
-            || matches!(self, Comma | RParen | RBrace | RBracket)
+    pub fn is_expr_parsing_sync_token(self) -> bool {
+        self.is_stmt_parsing_sync_token() || matches!(self, Comma | RParen | RBrace | RBracket)
     }
 
-    pub fn is_stmt_parsing_synchronization_token(self) -> bool {
+    pub fn is_stmt_parsing_sync_token(self) -> bool {
         matches!(self, EndKw | LF | Semicolon)
+    }
+
+    pub fn is_block_parsing_sync_token(self) -> bool {
+        matches!(self, EndKw)
     }
 }
 

@@ -35,6 +35,10 @@ pub enum ParseErrorKind {
         expected: SynTag,
         got: Option<SynTag>,
     },
+    ExpectedString {
+        expected: String,
+        got: Option<SynTag>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, PartialOrd, Ord)]

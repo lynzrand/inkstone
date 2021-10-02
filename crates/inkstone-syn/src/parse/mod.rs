@@ -17,6 +17,38 @@ use self::pratt_util::{
 
 pub type Errors = Vec<ParseError>;
 
+macro_rules! expect_or_recover_with {
+    ($self:expr, $expect:expr, $recovery:expr $(, $after:block)?) => {
+        match $self.expect($expect) {
+            Ok(_) => {},
+            Err(_) => {
+                $self.recover_error($recovery);
+                $(
+                    $after;
+                )?
+                return Default::default();
+            }
+        }
+    };
+    ($self:expr, {$($expect:pat => $process:expr),*} ,$recovery:expr $(, $after:block)?) => {
+        match $self.peek() {
+            $(
+                $expect => $process
+            ),*
+            _ => {
+                $self.recover_error($recovery);
+                $(
+                    $after;
+                )?
+                return Default::default();
+            }
+        }
+    };
+
+
+}
+
+/// The main parser that does the job.
 pub struct Parser<'src> {
     /// The lexer that does the job.
     lexer: Lexer<'src>,
@@ -353,7 +385,7 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn parse_primary_expr(&mut self) {
+    fn parse_primary_expr(&mut self) -> Result<()> {
         match self.peek() {
             BeginKw => {
                 self.b.start_node(BlockExpr.into());
@@ -398,10 +430,18 @@ impl<'src> Parser<'src> {
             ReturnKw => {
                 self.parse_return_expr();
             }
-            _ => {
-                todo!("got {:?}: `{}`", self.peek(), self.lexer.inner.remainder())
+            got => {
+                self.emit_error(ParseError::error(
+                    self.lexer.span().into_text_range(),
+                    ParseErrorKind::ExpectedString {
+                        expected: "An expression".into(),
+                        got: got.into(),
+                    },
+                ));
+                return Err(ParseErrorSignal);
             }
         }
+        Ok(())
     }
 
     fn parse_if_expr(&mut self) {
@@ -416,7 +456,9 @@ impl<'src> Parser<'src> {
         // end
 
         self.b.start_node(IfExpr.into());
-        self.expect(IfKw);
+        expect_or_recover_with!(self, IfKw, SynTag::is_block_parsing_sync_token, {
+            self.b.finish_node()
+        });
         self.eat_whitespace_or_line_feeds();
 
         self.parse_if_branch();
