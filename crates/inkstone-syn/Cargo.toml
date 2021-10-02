@@ -6,7 +6,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-combine = "4.6.1"
 logos = "0.12.0"
 enum-ordinalize = "3"
 rowan = "0.14.0"

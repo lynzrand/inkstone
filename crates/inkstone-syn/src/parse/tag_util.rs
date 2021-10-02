@@ -52,6 +52,15 @@ impl SynTag {
             | (BeginKw, EndKw)
         )
     }
+
+    pub fn is_expr_parsing_synchronization_token(self) -> bool {
+        self.is_stmt_parsing_synchronization_token()
+            || matches!(self, Comma | RParen | RBrace | RBracket)
+    }
+
+    pub fn is_stmt_parsing_synchronization_token(self) -> bool {
+        matches!(self, EndKw | LF | Semicolon)
+    }
 }
 
 pub struct FormatTree<'a>(pub &'a SyntaxNode<InkstoneLang>);

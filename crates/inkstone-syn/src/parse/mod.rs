@@ -1,20 +1,21 @@
-mod error_report;
+pub mod error_report;
 mod pratt_util;
 mod tag_util;
 #[cfg(test)]
 mod test;
 
-use rowan::{GreenNode, GreenNodeBuilder, SyntaxNode};
+use rowan::{GreenNodeBuilder, SyntaxNode};
 
 use crate::node::InkstoneLang;
 use crate::node::SynTag::{self, *};
 use crate::Lexer;
 
+use self::error_report::{IntoTextRange, ParseError, ParseErrorKind, ParseErrorSignal, Result};
 use self::pratt_util::{
     infix_binding_power, postfix_binding_power, prefix_binding_power, FUNCTION_CALL_PRECEDENCE,
 };
 
-pub type Errors = Vec<String>;
+pub type Errors = Vec<ParseError>;
 
 pub struct Parser<'src> {
     /// The lexer that does the job.
@@ -52,8 +53,14 @@ impl<'src> Parser<'src> {
         (SyntaxNode::new_root(self.b.finish()), self.errors)
     }
 
-    fn log_err(&mut self, err: String) {
+    fn emit_error(&mut self, err: ParseError) {
         self.errors.push(err)
+    }
+
+    fn recover_error(&mut self, predicate: impl Fn(SynTag) -> bool) {
+        self.b.start_node(Error.into());
+        self.eat_if(|t| !predicate(t));
+        self.b.finish_node();
     }
 
     fn eat_if<F: FnOnce(SynTag) -> bool>(&mut self, f: F) -> Option<SynTag> {
@@ -76,12 +83,21 @@ impl<'src> Parser<'src> {
         self.eat_if(|t| t == s).is_some()
     }
 
-    fn expect(&mut self, s: SynTag) -> bool {
-        let res = self.try_eat_token(s);
-        if !res {
-            panic!("Token mismatch! expected: {:?}, got: {:?}", s, self.peek());
+    #[must_use = "Do error recovery if expectation failed"]
+    fn expect(&mut self, s: SynTag) -> Result<()> {
+        if !self.try_eat_token(s) {
+            let got = self.peek();
+            self.emit_error(ParseError::error(
+                self.lexer.span().into_text_range(),
+                ParseErrorKind::Expected {
+                    expected: s,
+                    got: Some(got),
+                },
+            ));
+            Err(ParseErrorSignal)
+        } else {
+            Ok(())
         }
-        res
     }
 
     fn peek(&mut self) -> SynTag {
@@ -303,9 +319,7 @@ impl<'src> Parser<'src> {
 
                     while self.try_eat_token(Dot) {
                         self.eat_whitespace_or_line_feeds();
-                        if !self.expect(Ident) {
-                            panic!("todo expect ident")
-                        }
+                        self.expect(Ident);
                         self.eat_whitespace_in_parenthesis(in_parenthesis);
                     }
                 } else {
