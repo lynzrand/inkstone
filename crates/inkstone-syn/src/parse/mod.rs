@@ -19,8 +19,9 @@ use self::pratt_util::{
 
 pub type Errors = Vec<ParseError>;
 
-/// Expects a token, or recover until a token satisfies $recovery,
-/// closes `close_nodes = ?` nodes, and then executes a block
+/// Expects a token, or put all following tokens into a node labeled `Error`,
+/// until the next token satisfies $recovery.
+/// Closes `close_nodes = ?` nodes, and then executes a block
 macro_rules! expect_or_recover_with {
     ($self:expr, $expect:expr, $recovery:expr $(, close_nodes = $finish_node_count:expr)? $(, $after:block)?) => {
         match $self.expect($expect) {
@@ -57,6 +58,8 @@ macro_rules! expect_or_recover_with {
     };
 }
 
+/// See [`expect_or_recover_with`], but with a custom parsing expression that returns a
+/// [`Result`].
 macro_rules! recover_with {
     ($self:expr, $parse:expr $(,recovery = $recovery:expr )? $(, close_nodes =  $finish_node_count:expr)? $(, $after:block)?) => {
         match $parse {
@@ -224,14 +227,6 @@ impl<'src> Parser<'src> {
 
     fn peek(&mut self) -> SynTag {
         self.lexer.peek().unwrap_or(Eof)
-    }
-
-    fn peek_is(&mut self, s: SynTag) -> bool {
-        self.peek_if(|x| x == s)
-    }
-
-    fn peek_if<F: FnOnce(SynTag) -> bool>(&mut self, f: F) -> bool {
-        self.lexer.peek().map_or(false, f)
     }
 
     fn eat_whitespace(&mut self) {
@@ -550,7 +545,7 @@ impl<'src> Parser<'src> {
                 self.parse_object_literal();
             }
             Ident => {
-                self.parse_name_or_namespace();
+                self.parse_name_or_namespace()?;
             }
             LParen => {
                 self.parse_paren_expr_or_tuple();
@@ -805,7 +800,7 @@ impl<'src> Parser<'src> {
         );
         self.eat();
 
-        if self.peek_is(DoubleColon) {
+        if self.peek() == DoubleColon {
             self.start_node_at(ns_start, Namespace);
             while self.try_eat_token(DoubleColon) {
                 match self.expect(Ident) {
@@ -848,7 +843,7 @@ impl<'src> Parser<'src> {
         );
         self.eat_whitespace_or_line_feeds();
 
-        if self.peek_is(Comma) {
+        if self.peek() == Comma {
             self.start_node_at(paren_start, TupleLiteralExpr);
             while self.try_eat_token(Comma) {
                 self.eat_whitespace_or_line_feeds();
@@ -884,7 +879,7 @@ impl<'src> Parser<'src> {
         expect_or_recover_with!(self, LBracket, |_| true, close_nodes = 1);
         self.eat_whitespace_or_line_feeds();
 
-        if self.peek_if(|t| t.can_start_expr()) {
+        if self.peek().can_start_expr() {
             recover_with!(
                 self,
                 self.parse_expr(true),
@@ -975,14 +970,14 @@ impl<'src> Parser<'src> {
 
         self.eat_whitespace_or_line_feeds();
 
-        if self.peek_is(Ident) || self.peek_is(StringLiteral) || self.peek_is(Symbol) {
+        if matches!(self.peek(), Ident | StringLiteral | Symbol) {
             self.parse_key_value_pair(true);
             self.eat_whitespace_or_line_feeds();
-            while self.peek_is(Comma) {
+            while self.peek() == Comma {
                 self.eat();
 
                 self.eat_whitespace_or_line_feeds();
-                if !(self.peek_is(Ident) || self.peek_is(StringLiteral) || self.peek_is(Symbol)) {
+                if !(matches!(self.peek(), Ident | StringLiteral | Symbol)) {
                     break;
                 }
                 self.parse_key_value_pair(true);
@@ -1032,7 +1027,7 @@ impl<'src> Parser<'src> {
 
     fn parse_param_list(&mut self) {
         self.start_node(FuncParamList);
-        while self.peek_is(Ident) {
+        while self.peek() == Ident {
             self.start_node(FuncParam);
             self.eat();
             self.finish_node();
