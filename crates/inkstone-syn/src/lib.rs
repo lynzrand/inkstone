@@ -1,11 +1,18 @@
 use std::{collections::VecDeque, ops::Range};
 
 use logos::Span;
-use node::SynTag;
 
 pub mod ast;
 pub mod node;
 pub mod parse;
+
+pub use node::InkstoneLang;
+pub use node::SynTag;
+
+pub type SyntaxNode = rowan::SyntaxNode<InkstoneLang>;
+pub type SyntaxToken = rowan::SyntaxToken<InkstoneLang>;
+pub type SyntaxElement = rowan::SyntaxElement<InkstoneLang>;
+pub type SyntaxNodeChildren = rowan::SyntaxNodeChildren<InkstoneLang>;
 
 /// The main lexer used in Inkstone.
 pub struct Lexer<'lex> {
