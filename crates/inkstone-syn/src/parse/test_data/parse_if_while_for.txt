@@ -13,12 +13,12 @@ Root@0..296
         IfKw@9..11 "if"
         WS@11..12 " "
         IfBranch@12..31
-          Condition@12..16
+          Condition@12..15
             VarExpr@12..15
               Ident@12..15 "foo"
-            Semicolon@15..16 ";"
-          BlockScope@16..31
-            WS@16..17 " "
+          Semicolon@15..16 ";"
+          WS@16..17 " "
+          BlockScope@17..31
             ExprStmt@17..30
               FunctionCallExpr@17..29
                 VarExpr@17..19
@@ -49,7 +49,7 @@ Root@0..296
         IfKw@50..52 "if"
         WS@52..53 " "
         IfBranch@53..104
-          Condition@53..93
+          Condition@53..88
             BinaryExpr@53..88
               ParenExpr@53..68
                 LParen@53..54 "("
@@ -82,8 +82,8 @@ Root@0..296
                   LiteralExpr@85..87
                     Int@85..87 "30"
                 RParen@87..88 ")"
-            LF@88..89 "\n"
-            WS@89..93 "    "
+          LF@88..89 "\n"
+          WS@89..93 "    "
           BlockScope@93..104
             ExprStmt@93..104
               FunctionCallExpr@93..103
@@ -98,7 +98,7 @@ Root@0..296
         IfKw@109..111 "if"
         WS@111..112 " "
         IfBranch@112..146
-          Condition@112..127
+          Condition@112..122
             BinaryExpr@112..122
               BinaryExpr@112..118
                 LiteralExpr@112..113
@@ -113,8 +113,8 @@ Root@0..296
               WS@120..121 " "
               LiteralExpr@121..122
                 Int@121..122 "5"
-            LF@122..123 "\n"
-            WS@123..127 "    "
+          LF@122..123 "\n"
+          WS@123..127 "    "
           BlockScope@127..146
             ExprStmt@127..146
               FunctionCallExpr@127..145
@@ -170,7 +170,7 @@ Root@0..296
                     IfKw@203..205 "if"
                     WS@205..206 " "
                     IfBranch@206..244
-                      Condition@206..224
+                      Condition@206..211
                         BinaryExpr@206..211
                           VarExpr@206..207
                             Ident@206..207 "x"
@@ -179,8 +179,8 @@ Root@0..296
                           WS@209..210 " "
                           LiteralExpr@210..211
                             Int@210..211 "0"
-                        LF@211..212 "\n"
-                        WS@212..224 "            "
+                      LF@211..212 "\n"
+                      WS@212..224 "            "
                       BlockScope@224..244
                         ExprStmt@224..236
                           BreakExpr@224..235
@@ -201,7 +201,7 @@ Root@0..296
               IfKw@260..262 "if"
               WS@262..263 " "
               IfBranch@263..288
-                Condition@263..278
+                Condition@263..269
                   BinaryExpr@263..269
                     VarExpr@263..264
                       Ident@263..264 "w"
@@ -210,8 +210,8 @@ Root@0..296
                     WS@267..268 " "
                     LiteralExpr@268..269
                       Int@268..269 "5"
-                  LF@269..270 "\n"
-                  WS@270..278 "        "
+                LF@269..270 "\n"
+                WS@270..278 "        "
                 BlockScope@278..288
                   ExprStmt@278..284
                     BreakExpr@278..283

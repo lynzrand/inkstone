@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, ops::Range};
 
+use logos::Span;
 use node::SynTag;
 
 pub mod ast;
@@ -10,8 +11,10 @@ pub mod parse;
 pub struct Lexer<'lex> {
     /// The actual lexer that does the job.
     inner: logos::Lexer<'lex, SynTag>,
+    /// The span of the last token
+    span: Span,
     /// Tokens that has been splitted and put back into lexer.
-    pending_tokens: VecDeque<SynTag>,
+    pending_tokens: VecDeque<(SynTag, Span)>,
     /// Whether to ignore newlines when lexing.
     ignore_newline: bool,
 }
@@ -21,6 +24,7 @@ impl<'lex> Lexer<'lex> {
     pub fn new(s: &'lex str) -> Lexer<'lex> {
         Lexer {
             inner: logos::Lexer::new(s),
+            span: Default::default(),
             pending_tokens: VecDeque::new(),
             ignore_newline: false,
         }
@@ -50,36 +54,38 @@ impl<'lex> Lexer<'lex> {
 
     /// The span of the current token. Directly exported from the inner tokenizer.
     pub fn span(&self) -> Range<usize> {
-        self.inner.span()
+        self.span.clone()
+    }
+
+    pub fn peek_span(&mut self) -> Range<usize> {
+        if self.pending_tokens.is_empty() {
+            self.peek();
+        }
+        self.pending_tokens
+            .front()
+            .map(|(_, s)| s.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn peek_slice(&mut self) -> &'lex str {
+        &self.inner.source()[self.peek_span()]
     }
 
     /// The slice of string of the current token. Directly exported from the inner tokenizer.
     pub fn slice(&self) -> &'lex str {
-        self.inner.slice()
+        &self.inner.source()[self.span()]
     }
 
     /// Return a copy of the current front token without really consuming it.
     pub fn peek(&mut self) -> Option<SynTag> {
         if self.pending_tokens.is_empty() {
-            let next = self.next()?;
-            self.pending_tokens.push_front(next);
+            let next = self.inner.next()?;
+            self.pending_tokens.push_front((next, self.inner.span()));
         }
 
         debug_assert!(!self.pending_tokens.is_empty());
 
-        self.pending_tokens.front().copied()
-    }
-
-    /// Push tokens back into the lexer. This method pushes to the _front_ of the token list, and
-    /// follows a LIFO rule. Tokens will be pushed before those [`backtrack_back`] pushed.
-    pub fn backtrack_front(&mut self, tok: SynTag) {
-        self.pending_tokens.push_front(tok)
-    }
-
-    /// Push tokens back into the lexer. This method pushes to the _back_ of the token list, and
-    /// follows a FIFO rule. Tokens will be pushed after those [`backtrack_front`] pushed.
-    pub fn backtrack_back(&mut self, tok: SynTag) {
-        self.pending_tokens.push_back(tok)
+        self.pending_tokens.front().map(|(tag, _)| *tag)
     }
 }
 
@@ -88,8 +94,13 @@ impl<'lex> Iterator for Lexer<'lex> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // check pending tokens or lex the next one
-        self.pending_tokens
-            .pop_front()
-            .or_else(|| self.inner.next())
+        if let Some((tok, span)) = self.pending_tokens.pop_front() {
+            self.span = span;
+            Some(tok)
+        } else {
+            let tok = self.inner.next();
+            self.span = self.inner.span();
+            tok
+        }
     }
 }

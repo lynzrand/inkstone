@@ -35,7 +35,7 @@ Root@0..61
               LiteralExpr@26..27
                 Int@26..27 "5"
       LF@27..28 "\n"
-    FuncDef@28..61
+    FuncDef@28..57
       DefKw@28..31 "def"
       WS@31..32 " "
       Name@32..35
@@ -50,7 +50,7 @@ Root@0..61
         WS@39..40 " "
       Assign@40..41 "="
       WS@41..42 " "
-      BlockExpr@42..61
+      BlockExpr@42..56
         Block@42..56
           BeginKw@42..47 "begin"
           LF@47..48 "\n"
@@ -58,6 +58,6 @@ Root@0..61
           LF@52..53 "\n"
           BlockScope@53..53
           EndKw@53..56 "end"
-        LF@56..57 "\n"
-        WS@57..61 "    "
+      LF@56..57 "\n"
+    WS@57..61 "    "
 

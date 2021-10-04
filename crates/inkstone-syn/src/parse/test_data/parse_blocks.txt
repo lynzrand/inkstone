@@ -8,23 +8,23 @@ Root@0..53
           WS@6..10 "    "
           BlockScope@10..50
             ExprStmt@10..50
-              BlockExpr@10..50
+              BlockExpr@10..49
                 Block@10..49
                   BeginKw@10..15 "begin"
                   LF@15..16 "\n"
                   WS@16..24 "        "
                   BlockScope@24..46
-                    ExprStmt@24..46
-                      BlockExpr@24..46
+                    ExprStmt@24..42
+                      BlockExpr@24..41
                         Block@24..41
                           BeginKw@24..29 "begin"
                           LF@29..30 "\n"
                           WS@30..38 "        "
                           BlockScope@38..38
                           EndKw@38..41 "end"
-                        LF@41..42 "\n"
-                        WS@42..46 "    "
+                      LF@41..42 "\n"
+                    WS@42..46 "    "
                   EndKw@46..49 "end"
-                LF@49..50 "\n"
+              LF@49..50 "\n"
           EndKw@50..53 "end"
 

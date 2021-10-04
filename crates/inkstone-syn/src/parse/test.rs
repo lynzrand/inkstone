@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 
 use expect_test::{expect_file, ExpectFile};
 use rowan::SyntaxNode;
+use test_env_log::test;
 
 use crate::node::InkstoneLang;
 
@@ -48,9 +49,10 @@ fn test_parse_expr() {
     let input = "a.c (1+1) 2 (3 + 4 * 5 ** 6) (foo::bar event)";
 
     let mut parser = Parser::new(input);
-    parser.parse_expr(false);
+    parser.parse_expr(false).expect("should succeed");
 
-    let (result, _) = parser.finish();
+    let (result, err) = parser.finish();
+    assert!(err.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_expr.txt"]);
 }
@@ -67,7 +69,8 @@ foo (bar baz) * 3 + 2
     let mut parser = Parser::new(input);
     parser.parse_root();
 
-    let (result, _) = parser.finish();
+    let (result, err) = parser.finish();
+    assert!(err.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_function calls.txt"]);
 }
@@ -77,9 +80,10 @@ fn test_parse_lambda_expr() {
     let input = r#"env :hello "hello world!" \-> print env"#;
 
     let mut parser = Parser::new(input);
-    parser.parse_expr(false);
+    parser.parse_expr(false).expect("Should succeed");
 
-    let (result, _) = parser.finish();
+    let (result, err) = parser.finish();
+    assert!(err.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_lambda_expr.txt"]);
 }
@@ -100,7 +104,8 @@ def id x = \x -> x
     let mut parser = Parser::new(input);
     parser.parse_root();
 
-    let (result, _) = parser.finish();
+    let (result, err) = parser.finish();
+    assert!(err.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_let_stmts.txt"]);
 }
@@ -118,7 +123,8 @@ let y = {
     let mut parser = Parser::new(input);
     parser.parse_root();
 
-    let (result, _) = parser.finish();
+    let (result, err) = parser.finish();
+    assert!(err.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_objects.txt"]);
 }
@@ -151,7 +157,8 @@ end
     let mut parser = Parser::new(input);
     parser.parse_root();
 
-    let (result, _) = parser.finish();
+    let (result, e) = parser.finish();
+    assert!(e.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_if_while_for.txt"]);
 }
@@ -168,7 +175,8 @@ end
     let mut parser = Parser::new(input);
     parser.parse_root();
 
-    let (result, _) = parser.finish();
+    let (result, e) = parser.finish();
+    assert!(e.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_weird_exprs.txt"]);
 }

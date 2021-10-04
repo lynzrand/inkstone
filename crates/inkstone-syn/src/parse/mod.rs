@@ -4,48 +4,89 @@ mod tag_util;
 #[cfg(test)]
 mod test;
 
-use rowan::{GreenNodeBuilder, SyntaxNode};
+use rowan::{Checkpoint, GreenNodeBuilder, SyntaxNode};
 
 use crate::node::InkstoneLang;
 use crate::node::SynTag::{self, *};
 use crate::Lexer;
 
-use self::error_report::{IntoTextRange, ParseError, ParseErrorKind, ParseErrorSignal, Result};
+use self::error_report::{
+    IntoTextRange, ParseError, ParseErrorKind, ParseErrorSignal, ParseResult, Result,
+};
 use self::pratt_util::{
     infix_binding_power, postfix_binding_power, prefix_binding_power, FUNCTION_CALL_PRECEDENCE,
 };
 
 pub type Errors = Vec<ParseError>;
 
+/// Expects a token, or recover until a token satisfies $recovery,
+/// closes `close_nodes = ?` nodes, and then executes a block
 macro_rules! expect_or_recover_with {
-    ($self:expr, $expect:expr, $recovery:expr $(, $after:block)?) => {
+    ($self:expr, $expect:expr, $recovery:expr $(, close_nodes = $finish_node_count:expr)? $(, $after:block)?) => {
         match $self.expect($expect) {
             Ok(_) => {},
             Err(_) => {
                 $self.recover_error($recovery);
                 $(
-                    $after;
+                    for _ in 0..$finish_node_count {
+                        $self.finish_node();
+                    }
                 )?
-                return Default::default();
-            }
-        }
-    };
-    ($self:expr, {$($expect:pat => $process:expr),*} ,$recovery:expr $(, $after:block)?) => {
-        match $self.peek() {
-            $(
-                $expect => $process
-            ),*
-            _ => {
-                $self.recover_error($recovery);
                 $(
                     $after;
                 )?
-                return Default::default();
+                return ParseResult::ok_parse_result();
             }
         }
     };
+    ($self:expr, $expect:expr, $recovery:expr $(, close_nodes = $finish_node_count:expr)? $(, $after:block)? , no_return) => {
+        match $self.expect($expect) {
+            Ok(_) => {},
+            Err(_) => {
+                $self.recover_error($recovery);
+                $(
+                    for _ in 0..$finish_node_count {
+                        $self.finish_node();
+                    }
+                )?
+                $(
+                    $after;
+                )?
+            }
+        }
+    };
+}
 
-
+macro_rules! recover_with {
+    ($self:expr, $parse:expr $(,recovery = $recovery:expr )? $(, close_nodes =  $finish_node_count:expr)? $(, $after:block)?) => {
+        match $parse {
+            Ok(t) => t,
+            Err(_e) => {
+                $($self.recover_error($recovery);)?
+                $(
+                    for _ in 0..$finish_node_count {
+                        $self.finish_node();
+                    }
+                )?
+                $($after;)?
+                return ParseResult::ok_parse_result();
+            }
+        }
+    };
+    ($self:expr, $parse:expr $(,recovery = $recovery:expr )? $(, close_nodes =  $finish_node_count:expr)? $(, $after:block)?, no_return) => {
+        match $parse {
+            Ok(t) => t,
+            Err(_e) => {
+                $($self.recover_error($recovery);)?
+                $(
+                    for _ in 0..$finish_node_count {
+                        $self.finish_node();
+                    }
+                )?
+                $($after;)?
+            }
+        }
+    };
 }
 
 /// The main parser that does the job.
@@ -65,6 +106,10 @@ pub struct Parser<'src> {
     ///
     /// This stack will be used to perform error recovery.
     sync_token_stack: Vec<SynTag>,
+
+    #[cfg(debug_assertions)]
+    /// A node tree for debugging use
+    debug_node_tree: Vec<SynTag>,
 }
 
 impl<'src> Parser<'src> {
@@ -74,6 +119,8 @@ impl<'src> Parser<'src> {
             b: GreenNodeBuilder::new(),
             errors: Vec::new(),
             sync_token_stack: Vec::new(),
+            #[cfg(debug_assertions)]
+            debug_node_tree: Vec::new(),
         }
     }
 
@@ -85,24 +132,66 @@ impl<'src> Parser<'src> {
         (SyntaxNode::new_root(self.b.finish()), self.errors)
     }
 
+    fn start_node(&mut self, tag: SynTag) {
+        #[cfg(debug_assertions)]
+        {
+            tracing::debug!("> Start node.  {:?} ++ {:?}", self.debug_node_tree, tag);
+            self.debug_node_tree.push(tag);
+        }
+        self.b.start_node(tag.into());
+    }
+
+    fn start_node_at(&mut self, checkpoint: Checkpoint, tag: SynTag) {
+        #[cfg(debug_assertions)]
+        {
+            tracing::debug!(
+                "> Start node.  {:?} ++ {:?} <: {:?}",
+                self.debug_node_tree,
+                tag,
+                checkpoint
+            );
+            self.debug_node_tree.push(tag);
+        }
+        self.b.start_node_at(checkpoint, tag.into());
+    }
+
+    fn finish_node(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            let tag = self.debug_node_tree.pop();
+            tracing::debug!("< Finish node. {:?} :: {:?}", self.debug_node_tree, tag,);
+        }
+        self.b.finish_node();
+    }
+
     fn emit_error(&mut self, err: ParseError) {
+        tracing::info!(
+            "! Emitting error {:?}; current peek: {:?}",
+            err,
+            self.peek()
+        );
         self.errors.push(err)
     }
 
     fn recover_error(&mut self, predicate: impl Fn(SynTag) -> bool) {
-        self.b.start_node(Error.into());
+        tracing::debug!("# Begin error recovery");
+        self.start_node(Error);
         self.eat_if(|t| !predicate(t));
-        self.b.finish_node();
+        self.finish_node();
+        tracing::debug!("#!Recovery finished");
     }
 
     fn eat_if<F: FnOnce(SynTag) -> bool>(&mut self, f: F) -> Option<SynTag> {
-        let tok = self.lexer.next()?;
+        let tok = self.lexer.peek().unwrap_or(Eof);
         debug_assert!(tok.is_token());
         if f(tok) {
-            self.b.token(tok.into(), self.lexer.slice());
+            self.lexer.next();
+            tracing::debug!(": Input token: {:?}", tok);
+            if tok != Eof {
+                self.b.token(tok.into(), self.lexer.slice());
+            }
             Some(tok)
         } else {
-            self.lexer.backtrack_front(tok);
             None
         }
     }
@@ -119,8 +208,9 @@ impl<'src> Parser<'src> {
     fn expect(&mut self, s: SynTag) -> Result<()> {
         if !self.try_eat_token(s) {
             let got = self.peek();
+            let span = self.lexer.peek_span().into_text_range();
             self.emit_error(ParseError::error(
-                self.lexer.span().into_text_range(),
+                span,
                 ParseErrorKind::Expected {
                     expected: s,
                     got: Some(got),
@@ -169,106 +259,134 @@ impl<'src> Parser<'src> {
 /// - Whitespace tokens around a node should be placed **outside** that node.
 impl<'src> Parser<'src> {
     fn parse_root(&mut self) {
-        self.b.start_node(Root.into());
+        self.start_node(Root);
         self.eat_whitespace_or_line_feeds();
 
-        self.parse_block_scope();
+        self.parse_block_scope(|t| t == Eof);
 
-        self.b.finish_node();
+        self.finish_node();
     }
 
     fn parse_func_def(&mut self) {
         // def name param1 params = body
-        self.b.start_node(FuncDef.into());
-        self.expect(DefKw);
+        self.start_node(FuncDef);
+        expect_or_recover_with!(self, DefKw, |_| true);
         self.eat_whitespace_or_line_feeds();
 
-        self.b.start_node(Name.into());
-        self.expect(Ident);
-        self.b.finish_node();
+        self.start_node(Name);
+        expect_or_recover_with!(self, Ident, |t| t == Assign);
+        self.finish_node();
 
         self.eat_whitespace_or_line_feeds();
         self.parse_param_list();
 
         self.eat_whitespace_or_line_feeds();
-        self.expect(Assign);
+        expect_or_recover_with!(self, Assign, |t| t.is_stmt_parsing_sync_token());
         self.eat_whitespace_or_line_feeds();
 
-        self.parse_expr(false);
+        recover_with!(
+            self,
+            self.parse_expr(false),
+            recovery = |t| t.is_stmt_parsing_sync_token(),
+            close_nodes = 1
+        );
 
         self.eat_whitespace();
         self.parse_stmt_end();
-        self.b.finish_node();
+        self.finish_node();
     }
 
-    fn parse_block_scope(&mut self) {
-        self.b.start_node(BlockScope.into());
+    fn parse_block_scope(&mut self, is_end_token: impl Fn(SynTag) -> bool) {
+        self.start_node(BlockScope);
         self.eat_whitespace_or_line_feeds();
 
-        while self.peek_if(|t| t.can_start_stmt()) {
+        while !is_end_token(self.peek()) && self.peek() != Eof {
             self.parse_stmt();
             self.eat_whitespace_or_line_feeds();
         }
-        self.b.finish_node();
-
-        self.eat_whitespace_or_line_feeds();
+        self.finish_node();
     }
 
     fn parse_block(&mut self) {
         // begin
         //   ...stmt
         // end
-        self.b.start_node(Block.into());
-        self.expect(BeginKw);
+        self.start_node(Block);
+        expect_or_recover_with!(self, BeginKw, |_| true, { self.b.finish_node() });
 
         self.sync_token_stack.push(BeginKw);
         self.eat_whitespace_or_line_feeds();
 
-        self.parse_block_scope();
+        self.parse_block_scope(|t| t == EndKw);
 
         self.eat_whitespace_or_line_feeds();
 
-        self.eat();
+        expect_or_recover_with!(self, EndKw, |_| true, close_nodes = 1);
         self.sync_token_stack.pop();
 
-        self.b.finish_node();
-        self.eat_whitespace_or_line_feeds();
+        self.finish_node();
     }
 
     fn parse_let_stmt(&mut self) {
         // let x = expr
 
-        self.b.start_node(LetStmt.into());
-        self.expect(LetKw);
+        self.start_node(LetStmt);
+        expect_or_recover_with!(self, LetKw, |_| true, close_nodes = 1);
         self.eat_whitespace_or_line_feeds();
 
-        self.b.start_node(Name.into());
-        self.expect(Ident);
-        self.b.finish_node();
+        self.start_node(Name);
+        expect_or_recover_with!(
+            self,
+            Ident,
+            SynTag::is_stmt_parsing_sync_token,
+            close_nodes = 2
+        );
+        self.finish_node();
 
         self.eat_whitespace_or_line_feeds();
-        self.expect(Assign);
+        expect_or_recover_with!(
+            self,
+            Assign,
+            SynTag::is_stmt_parsing_sync_token,
+            close_nodes = 1
+        );
         self.eat_whitespace_or_line_feeds();
 
-        self.parse_expr(false);
+        recover_with!(
+            self,
+            self.parse_expr(false),
+            recovery = SynTag::is_stmt_parsing_sync_token,
+            close_nodes = 1
+        );
 
         self.eat_whitespace();
         self.parse_stmt_end();
-        self.b.finish_node();
+        self.finish_node();
     }
 
     fn parse_stmt_end(&mut self) {
-        self.eat_if(|t| t == LF || t == Semicolon);
+        if self.eat_if(|t| matches!(t, Semicolon | LF | Eof)).is_none() {
+            let peek = self.peek();
+            let span = self.lexer.peek_span().into_text_range();
+            self.emit_error(ParseError::error(span, ParseErrorKind::Unexpected(peek)));
+            self.recover_error(|t| matches!(t, Semicolon | LF | Eof));
+            self.eat_if(|t| t == Semicolon || t == LF);
+        }
     }
 
     fn parse_stmt(&mut self) {
         match self.peek() {
             t if t.can_start_expr() => {
-                self.b.start_node(ExprStmt.into());
-                self.parse_expr(false);
+                self.start_node(ExprStmt);
+                recover_with!(
+                    self,
+                    self.parse_expr(false),
+                    recovery = SynTag::is_stmt_parsing_sync_token,
+                    close_nodes = 1
+                );
                 self.eat_whitespace();
                 self.parse_stmt_end();
-                self.b.finish_node();
+                self.finish_node();
             }
             DefKw => {
                 self.parse_func_def();
@@ -277,12 +395,15 @@ impl<'src> Parser<'src> {
                 self.parse_let_stmt();
             }
             _ => {
-                panic!("unknown stmt, got {:?}", self.peek());
+                let span = self.lexer.peek_span().into_text_range();
+                self.emit_error(ParseError::error(span, ParseErrorKind::ExpectStmt));
+                self.recover_error(SynTag::is_stmt_parsing_sync_token);
+                // self.eat();
             }
         }
     }
 
-    fn parse_expr(&mut self, in_parenthesis: bool) {
+    fn parse_expr(&mut self, in_parenthesis: bool) -> Result<()> {
         debug_assert!(
             self.peek().can_start_expr(),
             "Must start with some token that can start an expression, got {:?} @ {:?}",
@@ -290,7 +411,7 @@ impl<'src> Parser<'src> {
             self.lexer.inner.remainder()
         );
 
-        self.parse_expr_pratt(0, in_parenthesis, false);
+        self.parse_expr_pratt(0, in_parenthesis, false)
     }
 
     fn parse_expr_pratt(
@@ -298,7 +419,7 @@ impl<'src> Parser<'src> {
         start_precedence: i32,
         in_parenthesis: bool,
         in_function_call: bool,
-    ) {
+    ) -> Result<()> {
         // This method uses pratt parsing
 
         // This checkpoint wraps the whole left-hand side
@@ -308,14 +429,18 @@ impl<'src> Parser<'src> {
             // parse prefix expr
             let tok = self.peek();
             if let Some(bp) = prefix_binding_power(tok) {
-                self.b.start_node(UnaryExpr.into());
+                self.start_node(UnaryExpr);
                 self.eat();
                 self.eat_whitespace_or_line_feeds();
-                self.parse_expr_pratt(bp, in_parenthesis, in_function_call);
-                self.b.finish_node();
+                recover_with!(
+                    self,
+                    self.parse_expr_pratt(bp, in_parenthesis, in_function_call),
+                    close_nodes = 1
+                );
+                self.finish_node();
             } else {
                 self.eat_whitespace_in_parenthesis(in_parenthesis);
-                self.parse_primary_expr();
+                self.parse_primary_expr()?;
             }
         }
         self.eat_whitespace_in_parenthesis(in_parenthesis);
@@ -327,10 +452,10 @@ impl<'src> Parser<'src> {
                     break;
                 }
 
-                self.b.start_node_at(start, UnaryExpr.into());
+                self.start_node_at(start, UnaryExpr);
                 self.eat();
 
-                self.b.finish_node();
+                self.finish_node();
             } else if let Some((lbp, rbp)) =
                 infix_binding_power(self.peek()).map(|x| x.binding_power())
             {
@@ -339,34 +464,49 @@ impl<'src> Parser<'src> {
                 }
                 if self.peek() == LBracket {
                     // subscript expr
-                    self.b.start_node_at(start, SubscriptExpr.into());
+                    self.start_node_at(start, SubscriptExpr);
                     self.eat();
                     self.eat_whitespace_or_line_feeds();
-                    self.parse_expr_pratt(rbp, true, false);
+                    match self.parse_expr_pratt(rbp, true, false) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            self.recover_error(|t| t == RBracket);
+                        }
+                    };
                     self.eat_whitespace_in_parenthesis(true);
-                    self.expect(RBracket);
+                    expect_or_recover_with!(self, RBracket, |_| true, close_nodes = 1);
+                    self.finish_node();
                 } else if self.peek() == Dot {
                     // dot expr only accepts identifiers
-                    self.b.start_node_at(start, DotExpr.into());
+                    self.start_node_at(start, DotExpr);
 
                     while self.try_eat_token(Dot) {
                         self.eat_whitespace_or_line_feeds();
-                        self.expect(Ident);
+                        expect_or_recover_with!(
+                            self,
+                            Ident,
+                            |t| t == Dot || t.is_expr_parsing_sync_token(),
+                            no_return
+                        );
                         self.eat_whitespace_in_parenthesis(in_parenthesis);
                     }
                 } else {
-                    self.b.start_node_at(start, BinaryExpr.into());
+                    self.start_node_at(start, BinaryExpr);
                     self.eat();
                     self.eat_whitespace_or_line_feeds();
-                    self.parse_expr_pratt(rbp, in_parenthesis, in_function_call);
+                    recover_with!(
+                        self,
+                        self.parse_expr_pratt(rbp, in_parenthesis, in_function_call),
+                        close_nodes = 1
+                    );
                 }
-                self.b.finish_node();
+                self.finish_node();
             } else if self.peek().can_start_expr() && !in_function_call {
                 if FUNCTION_CALL_PRECEDENCE < start_precedence {
                     break;
                 }
                 // function call
-                self.b.start_node_at(start, FunctionCallExpr.into());
+                self.start_node_at(start, FunctionCallExpr);
                 self.eat_whitespace_in_parenthesis(in_parenthesis);
 
                 // parse function params
@@ -374,28 +514,34 @@ impl<'src> Parser<'src> {
                     && (prefix_binding_power(self.peek())
                         .map_or(true, |p| p > FUNCTION_CALL_PRECEDENCE))
                 {
-                    self.parse_expr_pratt(FUNCTION_CALL_PRECEDENCE, in_parenthesis, true);
+                    recover_with!(
+                        self,
+                        self.parse_expr_pratt(FUNCTION_CALL_PRECEDENCE, in_parenthesis, true),
+                        close_nodes = 1
+                    );
                     self.eat_whitespace_in_parenthesis(in_parenthesis)
                 }
 
-                self.b.finish_node();
+                self.finish_node();
             } else {
                 break;
             }
         }
+
+        Ok(())
     }
 
     fn parse_primary_expr(&mut self) -> Result<()> {
         match self.peek() {
             BeginKw => {
-                self.b.start_node(BlockExpr.into());
+                self.start_node(BlockExpr);
                 self.parse_block();
-                self.b.finish_node();
+                self.finish_node();
             }
             Int | Float | StringLiteral | Symbol | TrueKw | FalseKw => {
-                self.b.start_node(LiteralExpr.into());
+                self.start_node(LiteralExpr);
                 self.eat();
-                self.b.finish_node();
+                self.finish_node();
             }
             LBracket => {
                 self.parse_array_literal();
@@ -431,8 +577,9 @@ impl<'src> Parser<'src> {
                 self.parse_return_expr();
             }
             got => {
+                let span = self.lexer.peek_span().into_text_range();
                 self.emit_error(ParseError::error(
-                    self.lexer.span().into_text_range(),
+                    span,
                     ParseErrorKind::ExpectedString {
                         expected: "An expression".into(),
                         got: got.into(),
@@ -455,7 +602,7 @@ impl<'src> Parser<'src> {
         //   else_block
         // end
 
-        self.b.start_node(IfExpr.into());
+        self.start_node(IfExpr);
         expect_or_recover_with!(self, IfKw, SynTag::is_block_parsing_sync_token, {
             self.b.finish_node()
         });
@@ -477,9 +624,9 @@ impl<'src> Parser<'src> {
                         self.parse_if_branch();
                     } else {
                         self.eat_whitespace_or_line_feeds();
-                        self.b.start_node(IfBranch.into());
-                        self.parse_block_scope();
-                        self.b.finish_node();
+                        self.start_node(IfBranch);
+                        self.parse_block_scope(|t| t == EndKw || t == ElseKw);
+                        self.finish_node();
                     }
                     self.eat_whitespace_or_line_feeds();
                 }
@@ -487,24 +634,45 @@ impl<'src> Parser<'src> {
                     self.eat();
                     break;
                 }
-                others => todo!("Unexpected token in if branch: {:?}", others),
+                others => {
+                    let span = self.lexer.peek_span().into_text_range();
+                    self.emit_error(ParseError::error(
+                        span,
+                        ParseErrorKind::ExpectedString {
+                            expected: "`else` or `end`".into(),
+                            got: others.into(),
+                        },
+                    ));
+                    break;
+                }
             }
         }
 
-        self.b.finish_node();
+        self.finish_node();
     }
 
     fn parse_if_branch(&mut self) {
-        self.b.start_node(IfBranch.into());
+        self.start_node(IfBranch);
         {
-            self.b.start_node(Condition.into());
-            self.parse_expr(false);
-            self.eat_whitespace_or_line_feeds();
+            self.start_node(Condition);
+            match self.parse_expr(false) {
+                Ok(_) => {
+                    self.finish_node();
+                }
+                Err(_) => {
+                    self.recover_error(|t| t.is_stmt_parsing_sync_token() || t == ElseKw);
+                    if matches!(self.peek(), ElseKw | EndKw) {
+                        self.finish_node();
+                        return;
+                    }
+                }
+            }
+            self.eat_whitespace();
             self.parse_stmt_end();
-            self.b.finish_node();
         }
-        self.parse_block_scope();
-        self.b.finish_node();
+        self.eat_whitespace_or_line_feeds();
+        self.parse_block_scope(|t| t == EndKw || t == ElseKw);
+        self.finish_node();
     }
 
     fn parse_while_expr(&mut self) {
@@ -512,22 +680,33 @@ impl<'src> Parser<'src> {
         //   body
         // end
 
-        self.b.start_node(WhileLoopExpr.into());
-        self.expect(WhileKw);
+        self.start_node(WhileLoopExpr);
+        expect_or_recover_with!(self, WhileKw, |_| true, close_nodes = 1);
         self.eat_whitespace_or_line_feeds();
 
-        self.b.start_node(Condition.into());
-        self.parse_expr(false);
-        self.b.finish_node();
+        self.start_node(Condition);
+        match self.parse_expr(false) {
+            Ok(_) => {
+                self.finish_node();
+            }
+            Err(_) => {
+                self.recover_error(|t| t.is_stmt_parsing_sync_token());
+                self.finish_node();
+                if matches!(self.peek(), EndKw) {
+                    self.finish_node();
+                    return;
+                }
+            }
+        }
 
         self.eat_whitespace();
         self.parse_stmt_end();
 
-        self.parse_block_scope();
+        self.parse_block_scope(|t| t == EndKw);
 
         self.eat_whitespace_or_line_feeds();
-        self.expect(EndKw);
-        self.b.finish_node();
+        expect_or_recover_with!(self, EndKw, |_| true, close_nodes = 1);
+        self.finish_node();
     }
 
     fn parse_for_expr(&mut self) {
@@ -535,57 +714,89 @@ impl<'src> Parser<'src> {
         //   body
         // end
 
-        self.b.start_node(ForLoopExpr.into());
-        self.expect(ForKw);
+        self.start_node(ForLoopExpr);
+        expect_or_recover_with!(
+            self,
+            ForKw,
+            SynTag::is_block_parsing_sync_token,
+            close_nodes = 1
+        );
         self.eat_whitespace_or_line_feeds();
 
-        self.b.start_node(Condition.into());
+        self.start_node(Condition);
         self.parse_binding_expr();
 
-        self.eat_whitespace_or_line_feeds();
-        self.expect(InKw);
+        self.eat_whitespace();
+        expect_or_recover_with!(
+            self,
+            InKw,
+            SynTag::is_block_parsing_sync_token,
+            close_nodes = 2
+        );
         self.eat_whitespace_or_line_feeds();
 
-        self.parse_expr(false);
-        self.b.finish_node();
+        recover_with!(
+            self,
+            self.parse_expr(false),
+            recovery = SynTag::is_stmt_parsing_sync_token,
+            no_return
+        );
+        self.finish_node();
 
         self.eat_whitespace();
         self.parse_stmt_end();
 
-        self.parse_block_scope();
+        self.parse_block_scope(|t| t == EndKw);
 
         self.eat_whitespace_or_line_feeds();
-        self.expect(EndKw);
-        self.b.finish_node();
+        expect_or_recover_with!(self, EndKw, |_| true, close_nodes = 2);
+        self.finish_node();
     }
 
     fn parse_binding_expr(&mut self) {
-        self.b.start_node(Binding.into());
-        self.expect(Ident);
-        self.b.finish_node();
+        self.start_node(Binding);
+        match self.expect(Ident) {
+            Ok(_) => {}
+            Err(_) => {
+                self.start_node(Error);
+                self.eat();
+                self.finish_node();
+            }
+        };
+        self.finish_node();
     }
 
     fn parse_break_expr(&mut self) {
-        self.b.start_node(BreakExpr.into());
-        self.expect(BreakKw);
+        self.start_node(BreakExpr);
+        expect_or_recover_with!(self, BreakKw, |_| true, close_nodes = 1);
         self.eat_whitespace();
         if self.peek().can_start_expr() {
-            self.parse_expr(false);
+            recover_with!(
+                self,
+                self.parse_expr(false),
+                recovery = SynTag::is_expr_parsing_sync_token,
+                close_nodes = 1
+            );
         }
-        self.b.finish_node();
+        self.finish_node();
     }
 
     fn parse_return_expr(&mut self) {
-        self.b.start_node(ReturnExpr.into());
-        self.expect(ReturnKw);
+        self.start_node(ReturnExpr);
+        expect_or_recover_with!(self, ReturnKw, |_| true, close_nodes = 1);
         self.eat_whitespace();
         if self.peek().can_start_expr() {
-            self.parse_expr(false);
+            recover_with!(
+                self,
+                self.parse_expr(false),
+                recovery = SynTag::is_expr_parsing_sync_token,
+                close_nodes = 1
+            );
         }
-        self.b.finish_node();
+        self.finish_node();
     }
 
-    fn parse_name_or_namespace(&mut self) {
+    fn parse_name_or_namespace(&mut self) -> Result<()> {
         let ns_start = self.b.checkpoint();
         debug_assert_eq!(
             self.peek(),
@@ -595,16 +806,24 @@ impl<'src> Parser<'src> {
         self.eat();
 
         if self.peek_is(DoubleColon) {
-            self.b.start_node_at(ns_start, Namespace.into());
+            self.start_node_at(ns_start, Namespace);
             while self.try_eat_token(DoubleColon) {
-                self.expect(Ident);
-                // TODO: error reduction
+                match self.expect(Ident) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        self.start_node(Error);
+                        self.eat();
+                        self.finish_node();
+                        self.finish_node();
+                        return Err(ParseErrorSignal);
+                    }
+                };
             }
-            self.b.finish_node();
         } else {
-            self.b.start_node_at(ns_start, VarExpr.into());
-            self.b.finish_node();
+            self.start_node_at(ns_start, VarExpr);
         }
+        self.finish_node();
+        Ok(())
     }
 
     fn parse_paren_expr_or_tuple(&mut self) {
@@ -616,86 +835,143 @@ impl<'src> Parser<'src> {
 
         if self.try_eat_token(RParen) {
             // Empty tuple
-            self.b.start_node_at(paren_start, TupleLiteralExpr.into());
-            self.b.finish_node();
+            self.start_node_at(paren_start, TupleLiteralExpr);
+            self.finish_node();
             return;
         }
 
-        self.parse_expr(true);
+        recover_with!(
+            self,
+            self.parse_expr(true),
+            recovery = SynTag::is_expr_parsing_sync_token,
+            no_return
+        );
         self.eat_whitespace_or_line_feeds();
 
         if self.peek_is(Comma) {
-            self.b.start_node_at(paren_start, TupleLiteralExpr.into());
+            self.start_node_at(paren_start, TupleLiteralExpr);
             while self.try_eat_token(Comma) {
+                self.eat_whitespace_or_line_feeds();
                 if self.try_eat_token(RParen) {
                     break;
                 }
-                self.parse_expr(true);
+                recover_with!(
+                    self,
+                    self.parse_expr(true),
+                    recovery = SynTag::is_expr_parsing_sync_token,
+                    no_return
+                );
                 self.eat_whitespace_or_line_feeds();
             }
-            self.b.finish_node();
         } else if self.try_eat_token(RParen) {
-            self.b.start_node_at(paren_start, ParenExpr.into());
-            self.b.finish_node();
+            self.start_node_at(paren_start, ParenExpr);
         } else {
-            todo!(
-                "Error: expect comma or parenthesis, got {:?}: `{}`",
-                self.peek(),
-                self.lexer.inner.remainder()
-            )
+            let peek = self.peek();
+            let span = self.lexer.peek_span().into_text_range();
+            self.emit_error(ParseError::error(
+                span,
+                ParseErrorKind::ExpectedString {
+                    expected: "Comma or Right Parenthesis".into(),
+                    got: peek.into(),
+                },
+            ))
         }
+        self.finish_node();
     }
 
     fn parse_array_literal(&mut self) {
-        self.b.start_node(ArrayLiteralExpr.into());
-        self.expect(LBracket);
+        self.start_node(ArrayLiteralExpr);
+        expect_or_recover_with!(self, LBracket, |_| true, close_nodes = 1);
         self.eat_whitespace_or_line_feeds();
 
         if self.peek_if(|t| t.can_start_expr()) {
-            self.parse_expr(true);
+            recover_with!(
+                self,
+                self.parse_expr(true),
+                recovery = SynTag::is_expr_parsing_sync_token,
+                no_return
+            );
             self.eat_whitespace_or_line_feeds();
-            while self.peek_is(Comma) {
-                self.expect(Comma);
+            while self.try_eat_token(Comma) {
                 self.eat_whitespace_or_line_feeds();
-                self.parse_expr(true);
+                if !self.peek().can_start_expr() {
+                    break;
+                }
+                recover_with!(
+                    self,
+                    self.parse_expr(true),
+                    recovery = SynTag::is_expr_parsing_sync_token,
+                    no_return
+                );
                 self.eat_whitespace_or_line_feeds();
             }
-            self.try_eat_token(Comma);
         }
 
         self.eat_whitespace_or_line_feeds();
-        self.expect(RBracket);
-        self.b.finish_node();
+        expect_or_recover_with!(
+            self,
+            RBracket,
+            |t| t == RBracket || t == Eof,
+            close_nodes = 1,
+            {
+                self.eat();
+            }
+        );
+        self.finish_node();
     }
 
     fn parse_key_value_pair(&mut self, in_parenthesis: bool) {
         // key: value
-        self.b.start_node(KeyValuePair.into());
+        self.start_node(KeyValuePair);
 
-        self.b.start_node(Name.into());
+        self.start_node(Name);
         if self
             .eat_if(|t| t == StringLiteral || t == Ident || t == Symbol)
             .is_none()
         {
-            panic!("not key: {:?}", self.peek());
+            let got = self.peek().into();
+            let span = self.lexer.peek_span().into_text_range();
+            self.emit_error(ParseError::error(
+                span,
+                ParseErrorKind::ExpectedString {
+                    expected: "Identifier, String literal or symbol".into(),
+                    got,
+                },
+            ));
+            self.recover_error(|t| t == Colon || t.is_expr_parsing_sync_token());
+            if self.peek() != Colon {
+                self.finish_node();
+                self.finish_node();
+                return;
+            }
         }
-        self.b.finish_node();
+        self.finish_node();
 
         self.eat_whitespace_in_parenthesis(in_parenthesis);
-        self.expect(Colon);
+        expect_or_recover_with!(
+            self,
+            Colon,
+            SynTag::is_expr_parsing_sync_token,
+            close_nodes = 1
+        );
         self.eat_whitespace_in_parenthesis(in_parenthesis);
 
-        self.parse_expr(in_parenthesis);
+        recover_with!(
+            self,
+            self.parse_expr(in_parenthesis),
+            recovery = SynTag::is_expr_parsing_sync_token,
+            close_nodes = 1
+        );
 
-        self.b.finish_node();
+        self.finish_node();
     }
 
     fn parse_object_literal(&mut self) {
         // {
         //   key: value, ...
         // }
-        self.b.start_node(ObjectLiteralExpr.into());
-        self.expect(LBrace);
+        self.start_node(ObjectLiteralExpr);
+        expect_or_recover_with!(self, LBrace, |_| true, close_nodes = 1);
 
         self.eat_whitespace_or_line_feeds();
 
@@ -703,7 +979,8 @@ impl<'src> Parser<'src> {
             self.parse_key_value_pair(true);
             self.eat_whitespace_or_line_feeds();
             while self.peek_is(Comma) {
-                self.expect(Comma);
+                self.eat();
+
                 self.eat_whitespace_or_line_feeds();
                 if !(self.peek_is(Ident) || self.peek_is(StringLiteral) || self.peek_is(Symbol)) {
                     break;
@@ -715,34 +992,52 @@ impl<'src> Parser<'src> {
 
         self.eat_whitespace_or_line_feeds();
 
-        self.expect(RBrace);
-        self.b.finish_node();
+        expect_or_recover_with!(
+            self,
+            RBrace,
+            |t| t == RBrace || t == Eof,
+            close_nodes = 1,
+            {
+                self.eat();
+            }
+        );
+        self.finish_node();
     }
 
     fn parse_lambda(&mut self) {
         // \x -> body
-        self.b.start_node(LambdaExpr.into());
-        self.expect(Backslash);
+        self.start_node(LambdaExpr);
+        expect_or_recover_with!(self, Backslash, |_| true, close_nodes = 1);
 
         self.parse_param_list();
 
-        self.expect(Arrow);
+        expect_or_recover_with!(
+            self,
+            Arrow,
+            |t| t.is_expr_parsing_sync_token(),
+            close_nodes = 1
+        );
         self.eat_whitespace_or_line_feeds();
 
-        self.b.start_node(FuncBody.into());
-        self.parse_expr(false);
-        self.b.finish_node();
-        self.b.finish_node();
+        self.start_node(FuncBody);
+        recover_with!(
+            self,
+            self.parse_expr(false),
+            recovery = |t| t.is_expr_parsing_sync_token(),
+            close_nodes = 2
+        );
+        self.finish_node();
+        self.finish_node();
     }
 
     fn parse_param_list(&mut self) {
-        self.b.start_node(FuncParamList.into());
+        self.start_node(FuncParamList);
         while self.peek_is(Ident) {
-            self.b.start_node(FuncParam.into());
+            self.start_node(FuncParam);
             self.eat();
-            self.b.finish_node();
+            self.finish_node();
             self.eat_whitespace_or_line_feeds();
         }
-        self.b.finish_node();
+        self.finish_node();
     }
 }

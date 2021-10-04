@@ -4,6 +4,7 @@ use rowan::TextRange;
 
 use crate::node::SynTag;
 
+#[derive(Debug, Clone, Copy)]
 pub struct ParseErrorSignal;
 pub type Result<T> = std::result::Result<T, ParseErrorSignal>;
 
@@ -31,6 +32,8 @@ impl ParseError {
 #[derive(Debug, Clone)]
 pub enum ParseErrorKind {
     Unexpected(SynTag),
+    ExpectStmt,
+    ExpectExpr,
     Expected {
         expected: SynTag,
         got: Option<SynTag>,
@@ -58,5 +61,25 @@ impl IntoTextRange for std::ops::Range<usize> {
             self.start.try_into().expect("Input too large"),
             self.end.try_into().expect("Input too large"),
         )
+    }
+}
+
+pub trait ParseResult {
+    fn ok_parse_result() -> Self;
+}
+
+impl ParseResult for () {
+    fn ok_parse_result() -> Self {}
+}
+
+impl ParseResult for Result<()> {
+    fn ok_parse_result() -> Self {
+        Ok(())
+    }
+}
+
+impl ParseResult for bool {
+    fn ok_parse_result() -> Self {
+        true
     }
 }
