@@ -1,6 +1,6 @@
 pub mod error_report;
-mod pratt_util;
-mod tag_util;
+pub mod pratt_util;
+pub mod tag_util;
 #[cfg(test)]
 mod test;
 
@@ -329,14 +329,7 @@ impl<'src> Parser<'src> {
         expect_or_recover_with!(self, LetKw, |_| true, close_nodes = 1);
         self.eat_whitespace_or_line_feeds();
 
-        self.start_node(Name);
-        expect_or_recover_with!(
-            self,
-            Ident,
-            SynTag::is_stmt_parsing_sync_token,
-            close_nodes = 2
-        );
-        self.finish_node();
+        self.parse_binding_expr();
 
         self.eat_whitespace_or_line_feeds();
         expect_or_recover_with!(
