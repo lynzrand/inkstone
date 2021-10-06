@@ -141,6 +141,14 @@ name = "inkstone"
 version = "0.1.0"
 
 [[package]]
+name = "inkstone-ir"
+version = "0.1.0"
+
+[[package]]
+name = "inkstone-ir-gen"
+version = "0.1.0"
+
+[[package]]
 name = "inkstone-syn"
 version = "0.1.0"
 dependencies = [
@@ -155,6 +163,10 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "inkstone-vm"
+version = "0.1.0"
 
 [[package]]
 name = "itertools"
