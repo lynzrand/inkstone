@@ -3,63 +3,57 @@
 ## A game
 
 ```ruby
-use inkstone::game
+use inkstone::game::*
+use inkstone_unity_adapter::UnityAdapter
 
-let env_proto = {
-    __proto: game_env_proto,
-    visit: \self -> begin
-        self.visited = true
-        self.visit_cnt = (self.visit_cnt + 1)
-    end
-}
+pub let env = Env::new (UnityAdapter::new ())
+let sylvie = env.character "Sylvie" text_color:0xc8ff88
+let player = env.character "Me" text_color:0xffffff
 
-def new_env = begin
-    {
-        __proto: env_proto,
-        visited: false,
-        visit_cnt: 0
-    }
+pub def game_start = begin
+  start ()
 end
 
-def game_start env = begin
-    env "An old house appeared in front of you."
-    env "It looked dark and scary."
-    
-    env.choice "Are you visiting it?" [
-        ("Nope, it looked too scary.", \-> ending_0 env),
-        ("Yep, worth a try.", \-> visit env)
-    ]
+def start = begin
+  env.set :background "meadows"
+
+  env "After a short while, we reach the meadows just outside the neighborhood where we both live."
+  env "It's a scenic view I've grown used to. Autumn is especially beautiful here."
+  env "When we were children, we played in these meadows a lot, so they're full of memories."
+
+  player "Hey... Umm..."
+
+  # This line
+  sylvie.set :image_overlay "smile"
+
+  env "She turns to me and smiles. She looks so welcoming that I feel my nervousness melt away."
+  env "I'll ask her...!"
+
+  env.choice [
+    ("Will you be my artist for a visual novel?", \-> ask_sylvie (\-> run_away :asked)),
+    ("Nothing at all!", \-> begin player "Noth... Nothing at all!"; run_away :not_asked; end)
+  ] as: player
 end
 
-def visit env = begin
-    env "You opened the beginor."
-    env "It is filled withthe smell of old wood, but nothing interesting happened."
-    
-    env.visit ()
-    
-    env.choice "Visit again?" [
-        ("Yes!", \-> visit env),
-        ("Not really.", \-> if env.visit_cnt < 5; ending_1 env; else ending_2 env; end)
-    ]
+def ask_sylvie cont = begin
+  player "Ummm... Will you..."
+  player "Will you be my artist for a visual novel?"
+
+  sylvie.set :image_overlay "surprised"
+
+  env "Silence."
+
+  cont ()
 end
 
-def ending_0 env = begin
-    env "You walked away."
-end
+def run_away asked = begin
+  sylvie.show false
+  env "I ran away with my face burning red."
 
-def ending_1 env = begin
-    env "A ghost appeared at the beginor."
-    env "You disturbed my house! Now I won't let you go." speaker: "Ghost"
-    env "The ghost pulled your soul out of your body."
+  if asked == :asked
+    env "I've never requested a girl like that."
+    env "And just then I heard Sylvie shouting from behind:"
+    sylvie "I'll try as long as you don't mind!"
+  end
 end
-
-def ending_2 env = begin
-    env "The house suddenly bursted into flames."
-    env "You're scared the shit out of your pants, and ran at your maximum speed out of it."
-    
-    std::task::yield
-end
-
-let env = new_env ()
-game_start env
 ```
