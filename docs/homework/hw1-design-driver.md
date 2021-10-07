@@ -33,7 +33,7 @@ Inkstone 当前的目标 (Goals) 如下：
   - 可能会使用不可变数据类型存储状态
   - 可能会另外设计一个可选的类型标注方法和类型检查
 - 动态派发/面向对象特性（可能会使用原型链或多派发实现）
-- 化简这些语法：函数调用、函数定义、对象构造
+- 化简这些语法：函数调用、函数定义、对象构造、lambda
   - 当前设计稿比较贴近 Ruby 的风格，混合了一些 Rust 和 Haskell
 - 内置支持 yield 和 coroutine（可能是以 channel/mailbox 的形式）
 - 带命名空间的外部函数导入机制
@@ -46,13 +46,16 @@ Inkstone 当前的目标 (Goals) 如下：
   - RenPy
   - Ruby
   - Rust
-- 函数调用
+- 动态派发
   - Elixir
-  - Julia
-- 面向对象
-  - Lua
   - Javascript
-  - Elixir
+  - Julia
+  - Lua
 - 类型系统
   - Elixir
+  - Julia
+  - TypeScript
+- 纤程
+  - Elixir
+  - Lua
 
