@@ -7,15 +7,15 @@ use inkstone::game::*
 use inkstone_unity_adapter::UnityAdapter
 
 pub let env = Env::new (UnityAdapter::new ())
-let sylvie = env.character "Sylvie" text_color:0xc8ff88
-let player = env.character "Me" text_color:0xffffff
+let sylvie = env.character "Sylvie" text_color: 0xc8ff88
+let player = env.character "Me" text_color: 0xffffff
 
 pub def game_start = begin
   start ()
 end
 
 def start = begin
-  env.set :background "meadows"
+  env.set background: "meadows"
 
   env "After a short while, we reach the meadows just outside the neighborhood where we both live."
   env "It's a scenic view I've grown used to. Autumn is especially beautiful here."
@@ -24,7 +24,7 @@ def start = begin
   player "Hey... Umm..."
 
   # This line
-  sylvie.set :image_overlay "smile"
+  sylvie.set image_overlay: "smile"
 
   env "She turns to me and smiles. She looks so welcoming that I feel my nervousness melt away."
   env "I'll ask her...!"
@@ -39,7 +39,7 @@ def ask_sylvie cont = begin
   player "Ummm... Will you..."
   player "Will you be my artist for a visual novel?"
 
-  sylvie.set :image_overlay "surprised"
+  sylvie.set image_overlay: "surprised"
 
   env "Silence."
 
