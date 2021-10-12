@@ -24,7 +24,8 @@ pub struct Inst {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 #[repr(u16)]
 pub enum InstKind {
-    Nop = 0,
+    Mov = 0,
+
     // int
     IAdd = 16,
     ISub,
@@ -34,45 +35,64 @@ pub enum InstKind {
     IOr,
     IXor,
     IEq,
-    INeq,
-    IGt,
     ILt,
-    IGe,
     ILe,
+
     // float
     FAdd = 32,
     FSub,
     FMul,
     FDiv,
     FEq,
-    FNeq,
-    FGt,
     FLt,
-    FGe,
     FLe,
+
+    I2F,
+    F2I,
+
     // bool
     BAnd,
     BOr,
     BXor,
     BNot,
+
+    // constants
+    IConst = 48,
+    FConst,
+    BTrue,
+    BFalse,
+    Nil,
+
     // scope
-    ScopeNew = 48,
+    ScopeNew = 64,
     ScopeLoad,
     ScopeStore,
+    ScopeCurrent,
     // tuple
     /// `dest <- TupleNew(p1=length, _)`
     TupleNew,
     // object
+    /// `dest <- ObjectNew(p1=initial_len)`
+    ObjectNew,
+    // array
+    /// `dest <- ArrayNew(p1=initial_len)`
+    ArrayNew,
+    // closure
+    /// `dest <- ClosureNew(p1=function, p2=scope)`
+    ClosureNew,
+
+    // object operations
     /// `dest[p1] <- p2`
     SubscriptSet,
     /// `dest <- p1[p2]`
     SubscriptLoad,
-    // closure
-    /// `dest <- ClosureNew(p1=function, p2=scope)`
-    ClosureNew,
+
     // flow control
+    /// `tail jump to (dest=function, p1=scope, p2=args)`
     Tail = 96,
+    /// `tail jump to (dest=function, p1=scope, p2=cond)`
     TailIf,
+
     Call,
 }
 

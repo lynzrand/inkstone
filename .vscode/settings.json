@@ -1,3 +1,4 @@
 {
-    "rust-analyzer.assist.importGranularity": "module"
+    "rust-analyzer.assist.importGranularity": "module",
+    "rpc.enabled": false
 }
