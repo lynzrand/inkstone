@@ -1,10 +1,10 @@
 pub mod alloc;
+#[cfg(test)]
+mod test;
+use modular_bitfield::prelude::*;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
-
-use modular_bitfield::prelude::*;
-use vtable::VRef;
-use vtable::{vtable, VRefMut};
+use vtable::{vtable, VRef, VRefMut};
 
 /// A garbage-collected pointer
 #[repr(transparent)]
@@ -133,7 +133,11 @@ pub struct GcTracerVTable {
 #[repr(C)]
 pub struct TraceVTable {
     trace: fn(VRef<TraceVTable>, tracer: VRefMut<GcTracerVTable>),
-    drop: fn(VRefMut<TraceVTable>),
+    drop_in_place: fn(VRefMut<TraceVTable>) -> Layout,
+
+    /// Dealloc this value using the global allocator. This method is NEVER used,
+    /// but present only to make [`vtable`] happy.
+    dealloc: fn(&TraceVTable, ptr: *mut u8, layout: Layout),
 }
 
 // pub trait GcTracer {
