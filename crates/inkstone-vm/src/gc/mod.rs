@@ -4,13 +4,16 @@ mod test;
 use alloc::RootSetHandle;
 use modular_bitfield::prelude::*;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::ptr::NonNull;
 use vtable::{vtable, HasStaticVTable, VRef, VRefMut};
 
 use self::alloc::GcAllocator;
 
-/// A garbage-collected pointer
+/// A garbage-collected pointer.
+///
+/// This pointer is both trace-collected and reference-counted, in order to
+/// achieve a better garbage collection.
 #[repr(transparent)]
 pub struct Gc<T: ?Sized>(NonNull<GcValue<T>>);
 
@@ -35,8 +38,10 @@ impl<T: ?Sized> Gc<T> {
         unsafe { std::mem::transmute(self) }
     }
 
-    fn header_ptr(&self) -> *mut GcHeader {
-        self.as_raw_ptr().header() as *const GcHeader as *mut GcHeader
+    fn header_ptr(&self) -> NonNull<GcHeader> {
+        unsafe {
+            NonNull::new_unchecked(self.as_raw_ptr().header() as *const GcHeader as *mut GcHeader)
+        }
     }
 }
 
@@ -98,18 +103,20 @@ impl<T: ?Sized> Drop for Gc<T> {
     }
 }
 
-unsafe fn gc_pointer_before_cloning(_ptr: *mut GcHeader) {
-    // TODO: Increase RC value
+unsafe fn gc_pointer_before_cloning(mut ptr: NonNull<GcHeader>) {
+    let header = ptr.as_mut();
+    header.flags.inc_rc();
 }
 
-unsafe fn gc_pointer_before_dropping(_ptr: *mut GcHeader) {
-    // TODO: Decrease RC value
+unsafe fn gc_pointer_before_dropping(mut ptr: NonNull<GcHeader>) {
+    let header = ptr.as_mut();
+    header.flags.dec_rc();
 }
 
 /// An untyped GC pointer.
 ///
 /// This type should have the same layout as [`Gc`].
-#[derive(Hash, Clone, Copy)]
+#[derive(Hash)]
 #[repr(transparent)]
 pub struct RawGcPtr(NonNull<GcHeader>);
 
@@ -142,13 +149,27 @@ impl RawGcPtr {
 
 impl<T> From<Gc<T>> for RawGcPtr {
     fn from(val: Gc<T>) -> Self {
-        *val.as_raw_ptr()
+        val.as_raw_ptr().clone()
     }
 }
 
 impl<T> AsRef<RawGcPtr> for Gc<T> {
     fn as_ref(&self) -> &RawGcPtr {
         self.as_raw_ptr()
+    }
+}
+
+impl Clone for RawGcPtr {
+    fn clone(&self) -> Self {
+        let mut ptr = self.0;
+        unsafe { ptr.as_mut() }.flags.inc_rc();
+        Self(ptr)
+    }
+}
+
+impl Drop for RawGcPtr {
+    fn drop(&mut self) {
+        unsafe { self.0.as_mut() }.flags.dec_rc();
     }
 }
 
@@ -217,6 +238,27 @@ struct GcHeaderFlags {
     __: B11,
 }
 
+impl GcHeaderFlags {
+    pub const fn rc_max() -> u32 {
+        (1 << 18) - 1
+    }
+
+    pub fn inc_rc(&mut self) {
+        let rc = self.rc();
+        if rc < Self::rc_max() - 1 {
+            self.set_rc(rc + 1)
+        }
+    }
+
+    pub fn dec_rc(&mut self) {
+        let rc = self.rc();
+        debug_assert!(rc > 0, "reference count was decreased below 0");
+        if rc < Self::rc_max() - 1 {
+            self.set_rc(rc - 1)
+        }
+    }
+}
+
 #[derive(Debug, BitfieldSpecifier)]
 #[bits = 2]
 enum GcColor {
@@ -234,7 +276,7 @@ pub struct Persistent<T>(RootSetHandle, PhantomData<T>);
 
 impl<T> Persistent<T> {
     pub fn as_handle(&self, alloc: &GcAllocator) -> Option<Gc<T>> {
-        unsafe { Some(alloc.persistent_handles.get(self.0)?.cast()) }
+        unsafe { Some(alloc.persistent_handles.get(self.0)?.clone().cast()) }
     }
 }
 
