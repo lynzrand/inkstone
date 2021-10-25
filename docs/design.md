@@ -22,163 +22,90 @@ Inkstone takes ideas from many other languages, like Lisp, OCaml, Elixir, Ruby, 
   - Tuple, Vector, Map
 - Implicit params
 
-
-## Spec
-
-```
-EOL -> '\n'
-Ident -> [a-zA-Z0-9_?!]
-Namespace -> Ident ('::' Ident)*
-
-Type -> Namespace
-Var -> Namespace | Ident
-
-UseStmt -> 'use' Namespace EOL
-
-LetStmt -> 'let' Ident<Var> (':' Type) '=' Expr
-
-FuncCallParam -> Expr | Ident<FuncParam> ':' Expr
-FuncCallExpr -> '(' Expr<type=Function> ')' | Expr<type=Function> FuncCallParam+
-# Functions with no params must be called inside a pair of parenthesis.
-# This is to avoid ambiguity: is `f` the value of variable `f`, or calling `f` with no params?
-
-BinaryOp -> '+' | '-' | '*' | '/' | '**' | '%' | '&&' | '||' | '&' | '|' | '^' | '<' | '>' | '<=' | '>=' | '==' | '!=' | 'and' | 'or'
-BinaryExpr -> Expr BinaryOp Expr
-
-UnaryOp -> '!'
-UnaryExpr -> UnaryOp Expr
-
-# ParenExpr: -> Expr::Ty
-ParenExpr -> '(' Expr ')'
-
-IntLiteral -> _
-FloatLiteral -> _
-
-# StringLiteral doesn't check for validity of escape sequences.
-# It just let the next character after '\' carry on as a normal char, instead of
-# an interpolated sequence or the ending quote of the string.
-# InterpolatedStringChar -> [^\r\n\\"$] | '\' <AnyChar>
-StringChar -> [^\r\n\\"] | '\' <AnyChar>
-# InterpolatedStringStart -> '"' InterpolatedStringChar* '$'
-# InterpolatedPart -> Ident | '{' Expr '}'
-# InterpolatedStringMiddle -> InterpolatedStringChar* '$'
-# InterpolatedStringEnd -> InterpolatedStringChar* '"'
-# InterpolatedString -> 
-#     InterpolatedStringStart 
-#     (InterpolatedPart InterpolatedStringMiddle)* 
-#     InterpolatedPart InterpolatedStringEnd
-StringLiteral -> '"' InterpolatedStringChar* '"'
-# StringLiteral -> NoninterpolatedString | InterpolatedString
-
-# SymbolLiteral: -> Symbol
-SymbolLiteral -> ':'<>Ident
-
-# TupleLiteral: if Single exists; (-> Tuple<Single::Ty>) else (-> Tuple<First::Ty, ...Other::Ty>)
-TupleLiteral -> '(' First=Expr (',' Other=Expr)+ ','? ')' | '(' Single=Expr ',' ')'
-
-# ArrayLiteral: -> type_upper_bound(...Expr::Ty)
-ArrayLiteral -> '[' (Expr (',' Expr)* ','?)? ']'
-
-# ObjectLiteral: -> Object
-ObjectKey -> Ident | '[' Expr ']'
-ObjectLiteral -> '{' (ObjectKey ':' Expr (',' ObjectKey ':' Expr)* ','? ) '}'
-
-LiteralExpr -> 
-    | IntLiteral 
-    | FloatLiteral 
-    | StringLiteral 
-    | TupleLiteral 
-    | ArrayLiteral 
-    | ObjectLiteral
-    | SymbolLiteral
-
-# IfExpr: -> type_upper_bound(IfBlock::Ty, ...ElseIfBlock::Ty, ElseBlock::Ty)
-IfExpr -> 'if' Expr<Ty=bool> (EOL | ':') IfBlock=BlockInnerExpr
-    ('else' 'if' Expr<Ty=bool> (EOL | ':') ElseIfBlock=BlockInnerExpr)?
-    ('else' ':' ElseBlock=BlockInnerExpr)?
-    'end'
-
-# WhileExpr: if no `'break' Value` inside body: (-> nil) else (-> type_upperbound(...Value))
-WhileExpr -> 'while’ Expr<Ty=bool> (EOL | ':') BlockInnerExpr 'end'
-
-# ClosureExpr: -> Fn(...FuncParamList::Ty) -> Expr::Ty
-ClosureExpr -> '\' FuncParamList? '->' Expr
-
-# ReturnExpr: -> !
-ReturnExpr -> 'return' Expr
-
-# VarExpr: -> Scope::ident(Ident)::Ty
-VarExpr -> Ident
-
-# DotExpr: -> Expr.ident::Ty
-DotExpr -> Expr '.' Ident
-
-# SubscriptExpr: -> Receiver::operator[](Subscript::Ty)::Ty
-SubscriptExpr -> Receiver=Expr '[' Subscript=Expr ']'
-
-LValue -> VarExpr | DotChildExpr | SubscriptExpr
-# AssignExpr -> nil
-AssignExpr -> LValue '=' Expr
-
-ReturnExpr -> 'return' Expr?
-BreakExpr -> 'break' Expr?
-
-Expr -> 
-    | ParenExpr
-    | UnaryExpr
-    | BinaryExpr
-    | FuncCallExpr
-    | VarExpr
-    | DotExpr
-    | SubscriptExpr
-    | LiteralExpr
-    | IfExpr
-    | BlockExpr
-    | ReturnExpr
-    | BreakExpr
-
-# BlockInnerExpr: if len(Stmt) > 0: (-> Stmt[-1]::Ty) else: (-> nil)
-BlockInnerExpr -> Stmt*
-
-# BlockExpr: BlockInnerExpr::Ty
-BlockExpr -> 'begin' BlockInnerExpr 'end'
-
-ExprStmt -> Expr
-
-LetStmt -> 'let' Ident '=' Expr
-
-StmtInner -> ExprStmt | UseStmt | FuncDef | ModuleDef | LetStmt 
-Stmt -> StmtInner (EOL | ';')
-
-
-FuncParam -> Ident
-FuncParamList -> FuncParam (',' FuncParam)*
-FuncDef -> 'def' Ident FuncParamList BlockExpr
-
-ModuleDef -> 'mod' Ident Block?
-```
-
-### Precedence
-
-From high to low:
-
-- Primary Expr: Var, Literal, Namespace, Blocks, If/While/For loops
-- Dot/Subscript Expr `x.a` `x[a]`
-- Lambda `\x -> block`, 
-- Func call `func a b`
-- Unary Op `!x`
-- Power Op `x ** y`
-- Multiplicative Op `x * y` `x / y` `x % y`
-- Bitwise Op `x & y` `x | y` `x ^ y`
-- Additive Op `x + y` `x - y`
-- Comparison Op `x < y` `x > y` `x <= y` `x >= y` `x == y` `x != y`
-- Unary Logical Op `not x`
-- Binary Logical Op `x and y` `x or y`
-- Assignment Op `x = y`
-
 ## OOP
 
-OOP is achieved by prototype-based 
+OOP is achieved by using prototypes. Tuples and Maps can set their prototypes to use object methods.
+
+```ruby
+mod std.result
+
+def new val = std.make val Result
+def ok val = new (:ok, val)
+def err err = new (:err, err)
+def map self fn =
+  match self 
+    (:ok, val) -> (:ok, fn val)
+    (:err, e) -> (:err, e)
+  end
+
+pub let Result = {
+  ok,
+  err,
+  map
+}
+
+mod sample 
+    let my_result = Result.ok "Yay!"
+    let my_err = Result.err "Error!"
+
+    my_result.map \x -> x + " -- from a result"
+end
+```
+
+## Typings
+
+Inkstone has the following primitive types:
+
+- Int
+- Float
+- Boolean
+- Symbol (aka Atom)
+- Function
+- Nil
+
+Inkstone also has the following compound types:
+
+- Tuple (A heterogeneous immutable list of values)
+- Array (A probably homogeneous mutable list of values)
+- Map (A list of 2-tuples indexed on their first value)
+
+Tuples and Maps also has an optional value bound to them called the `prototype`. The prototype provides support for object methods and dynamic dispatching. If a property doesn't exist on an object, it will be searched in its prototype.
+
+Operator overloading is achieved via magic methods.
+
+### Type Annotation
+
+Inkstone _should_ include an optional type annotation system. However, it might not be included in the homework since time limit is tight.
+
+Type annotation is written as `::` followed by a Type (when the type can be expressed in a single identifier), or a type wrapped in parenthesis. The return type of a function is written as an arrow `->` followed by a Type.
+
+A type's name is an identifier, like `Result`. If the type has additional parameters, it's written like a function call, like `Result T E`. Nested types are written in parentheses.
+
+Internal types have their own type annotation. Tuples are represented as `()`, `(T1,)`, and `(T1, T2, ...)`. Vectors are represented as `Vec T`. Homogeneous maps are represented as `Map K V`, and heterogeneous maps are represented as `{key1: V1, ...}`.
+
+Types are declared as `'pub'? 'type' Ty (= Definition)?`. If a variable at the same scope has the same name as the type, that variable is viewed as the prototype of this type.
+
+The above example, with types annotated:
+
+```ruby
+type ResultTag = :ok | :err
+
+def new val::((:ok, T) | (:err, E)) -> Result T E = std.make val Result
+def ok val::T -> Result T E = new (:ok, val)
+def err err::E -> Result T E = new (:err, err)
+def map self::(Result T E) fn::(Fn T -> U) -> Result U E =
+  match self 
+    (:ok, val) -> (:ok, fn val)
+    (:err, e) -> (:err, e)
+  end
+
+pub type Result T E = (:ok, T) | (:err, E)
+pub let Result = {
+  ok,
+  err,
+  map
+}
+```
 
 ## Closures
 
