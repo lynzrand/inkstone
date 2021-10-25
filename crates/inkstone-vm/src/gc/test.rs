@@ -90,6 +90,7 @@ impl Trace for CycleReferenceStruct {
     }
 }
 
+#[test]
 fn test_tracer_cycle_reference() {
     let mut alloc = GcAllocator::new().expect("Failed to initialize allocator");
 
@@ -132,7 +133,8 @@ fn test_tracer_cycle_reference() {
 
     assert_eq!(
         alloc.total_mem_allocated(),
-        size_of::<CycleReferenceStruct>()
+        size_of::<CycleReferenceStruct>(),
+        "p2 and p3 should be deallocated, although they form reference cycles"
     );
 
     drop(p1);

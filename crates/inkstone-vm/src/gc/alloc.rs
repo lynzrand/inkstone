@@ -226,6 +226,10 @@ impl GcAllocator {
 
     pub fn trigger_gc(&mut self) {
         // TODO: do garbage collection
+
+        // The garbage collector has 3 stages:
+        //
+        // - Marking stage.    In this stage,
     }
 
     fn mark(&mut self) {}
@@ -301,7 +305,9 @@ unsafe fn alloc_new_chunk(next: Option<NonNull<ChunkHeader>>) -> Option<NonNull<
     Some(chunk)
 }
 
-impl GcTracer for GcAllocator {
+struct GcMarkAndSweepTracer {}
+
+impl GcTracer for GcMarkAndSweepTracer {
     fn trace(&mut self, ptr: &RawGcPtr) {
         todo!()
     }

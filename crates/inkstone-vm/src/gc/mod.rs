@@ -127,7 +127,7 @@ impl RawGcPtr {
     ///
     /// The pointer must be pointing to the given type.
     pub unsafe fn cast<T>(self) -> Gc<T> {
-        Gc(self.0.cast())
+        std::mem::transmute(self)
     }
 
     fn header(&self) -> &GcHeader {
@@ -172,6 +172,11 @@ impl Drop for RawGcPtr {
         unsafe { self.0.as_mut() }.flags.dec_rc();
     }
 }
+
+// Assert layout
+static_assertions::assert_eq_align!(RawGcPtr, Gc<()>);
+static_assertions::assert_eq_size!(RawGcPtr, Gc<()>);
+static_assertions::assert_eq_size!(RawGcPtr, *mut ());
 
 /// The heap allocated part of a [`GcValue`].
 ///
