@@ -1,4 +1,5 @@
 use std::alloc::Layout;
+use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr::NonNull;
 
@@ -21,7 +22,7 @@ pub struct GcAllocator {
     chunks: Option<NonNull<ChunkHeader>>,
 
     /// A series of handles that are considered as part of the root set.
-    persistent_handles: HopSlotMap<RootSetHandle, GcHeader>,
+    pub(crate) persistent_handles: HopSlotMap<RootSetHandle, RawGcPtr>,
     /// A chain of objects that are oversized and allocated separately
     oversize_chain: Option<NonNull<GcHeader>>,
 }
@@ -223,7 +224,9 @@ impl GcAllocator {
         Some(RawGcPtr(ptr))
     }
 
-    pub fn trigger_gc(&mut self) {}
+    pub fn trigger_gc(&mut self) {
+        // TODO: do garbage collection
+    }
 
     fn mark(&mut self) {}
 
