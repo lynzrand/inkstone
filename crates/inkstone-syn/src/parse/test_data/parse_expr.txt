@@ -1,6 +1,6 @@
-FunctionCallExpr@0..45
+FunctionCallExpr@0..44
   DotExpr@0..4
-    VarExpr@0..1
+    IdentExpr@0..1
       Ident@0..1 "a"
     Dot@1..2 "."
     Ident@2..3 "c"
@@ -42,15 +42,16 @@ FunctionCallExpr@0..45
             Int@26..27 "6"
     RParen@27..28 ")"
   WS@28..29 " "
-  ParenExpr@29..45
+  ParenExpr@29..44
     LParen@29..30 "("
-    FunctionCallExpr@30..44
-      Namespace@30..38
-        Ident@30..33 "foo"
-        DoubleColon@33..35 "::"
-        Ident@35..38 "bar"
-      WS@38..39 " "
-      VarExpr@39..44
-        Ident@39..44 "event"
-    RParen@44..45 ")"
+    FunctionCallExpr@30..43
+      DotExpr@30..38
+        IdentExpr@30..33
+          Ident@30..33 "foo"
+        Dot@33..34 "."
+        Ident@34..37 "bar"
+        WS@37..38 " "
+      IdentExpr@38..43
+        Ident@38..43 "event"
+    RParen@43..44 ")"
 

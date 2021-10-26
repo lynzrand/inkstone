@@ -167,7 +167,7 @@ ast_node!(Expr, {
     SynTag::BinaryExpr       => (Binary, BinaryExpr),
     SynTag::UnaryExpr        => (Unary, UnaryExpr),
     SynTag::FunctionCallExpr => (FunctionCall, FunctionCallExpr),
-    SynTag::VarExpr          => (Var, BinaryExpr),
+    SynTag::IdentExpr          => (Var, BinaryExpr),
     SynTag::Namespace        => (Namespace, NamespaceExpr),
     SynTag::SubscriptExpr    => (Subscript, SubscriptExpr),
     SynTag::DotExpr          => (Dot, DotExpr),
@@ -201,7 +201,7 @@ impl FunctionCallExpr {
     impl_child!(n, params, Expr, skip = 1);
 }
 
-ast_node!(VarExpr, SynTag::VarExpr);
+ast_node!(VarExpr, SynTag::IdentExpr);
 impl VarExpr {
     impl_child!(tok1, ident, |o| o == SynTag::Ident);
 }

@@ -2,9 +2,10 @@ Root@0..61
   LF@0..1 "\n"
   BlockScope@1..61
     LetStmt@1..28
+      Visibility@1..1
       LetKw@1..4 "let"
       WS@4..5 " "
-      Name@5..8
+      Binding@5..8
         Ident@5..8 "foo"
       WS@8..9 " "
       Assign@9..10 "="
@@ -19,7 +20,7 @@ Root@0..61
         WS@16..17 " "
         FuncBody@17..27
           BinaryExpr@17..27
-            VarExpr@17..18
+            IdentExpr@17..18
               Ident@17..18 "x"
             Pow@18..20 "**"
             FunctionCallExpr@20..27
@@ -36,6 +37,7 @@ Root@0..61
                 Int@26..27 "5"
       LF@27..28 "\n"
     FuncDef@28..57
+      Visibility@28..28
       DefKw@28..31 "def"
       WS@31..32 " "
       Name@32..35

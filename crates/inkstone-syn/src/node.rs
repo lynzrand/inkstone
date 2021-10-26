@@ -47,6 +47,8 @@ pub enum SynTag {
     InKw,
     #[token("mod")]
     ModKw,
+    #[token("pub")]
+    PubKw,
     // `and`, `or` and `not` are both keywords and operators
     #[token("and")]
     AndKw,
@@ -69,7 +71,7 @@ pub enum SynTag {
     Symbol,
     #[regex(r"0|0x[0-9a-fA-F_]+|[0-9]+")]
     Int,
-    #[regex(r"[0-9]*\.[0-9]+([eE][+-]?[0-9]+)")]
+    #[regex(r"[0-9]*\.[0-9]+([eE][+-]?[0-9]+)?")]
     Float,
 
     /// An RFC8259-compliant string. Invalid cases are handled afterward.
@@ -174,7 +176,7 @@ pub enum SynTag {
     UnaryExpr,
     BinaryExpr,
     FunctionCallExpr,
-    VarExpr,
+    IdentExpr,
     DotExpr,
     SubscriptExpr,
     LiteralExpr,
@@ -221,6 +223,9 @@ pub enum SynTag {
     FuncBody,
 
     ModuleDef,
+
+    Visibility,
+    Pub,
 
     /// The root node of the syntax tree
     Root,

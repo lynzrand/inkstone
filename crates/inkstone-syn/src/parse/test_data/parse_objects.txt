@@ -2,9 +2,10 @@ Root@0..94
   LF@0..1 "\n"
   BlockScope@1..94
     LetStmt@1..38
+      Visibility@1..1
       LetKw@1..4 "let"
       WS@4..5 " "
-      Name@5..6
+      Binding@5..6
         Ident@5..6 "x"
       WS@6..7 " "
       Assign@7..8 "="
@@ -32,21 +33,22 @@ Root@0..94
         Comma@22..23 ","
         WS@23..24 " "
         FunctionCallExpr@24..31
-          VarExpr@24..27
+          IdentExpr@24..27
             Ident@24..27 "foo"
           WS@27..28 " "
-          VarExpr@28..31
+          IdentExpr@28..31
             Ident@28..31 "bar"
         Comma@31..32 ","
         WS@32..33 " "
-        VarExpr@33..36
+        IdentExpr@33..36
           Ident@33..36 "baz"
         RBracket@36..37 "]"
       LF@37..38 "\n"
     LetStmt@38..90
+      Visibility@38..38
       LetKw@38..41 "let"
       WS@41..42 " "
-      Name@42..43
+      Binding@42..43
         Ident@42..43 "y"
       WS@43..44 " "
       Assign@44..45 "="
@@ -68,7 +70,7 @@ Root@0..94
             Arrow@59..61 "->"
             FuncBody@61..66
               DotExpr@61..66
-                VarExpr@61..62
+                IdentExpr@61..62
                   Ident@61..62 "x"
                 Dot@62..63 "."
                 Ident@63..66 "foo"
@@ -81,10 +83,10 @@ Root@0..94
           Colon@77..78 ":"
           WS@78..79 " "
           FunctionCallExpr@79..86
-            VarExpr@79..82
+            IdentExpr@79..82
               Ident@79..82 "baz"
             WS@82..83 " "
-            VarExpr@83..86
+            IdentExpr@83..86
               Ident@83..86 "bug"
         Comma@86..87 ","
         LF@87..88 "\n"

@@ -46,7 +46,7 @@ end
 
 #[test]
 fn test_parse_expr() {
-    let input = "a.c (1+1) 2 (3 + 4 * 5 ** 6) (foo::bar event)";
+    let input = "a.c (1+1) 2 (3 + 4 * 5 ** 6) (foo.bar event)";
 
     let mut parser = Parser::new(input);
     parser.parse_expr(false).expect("should succeed");
@@ -179,4 +179,29 @@ end
     assert!(e.is_empty());
 
     assert_tree_matches(result, expect_file!["./test_data/parse_weird_exprs.txt"]);
+}
+
+#[test]
+fn test_parse_public_declarations() {
+    let input = r#"
+pub def new tag val = std.make (tag, val) Result
+pub def ok val = new :ok val
+
+pub let foo_constant = 1.2345
+
+pub mod bar
+    pub let bar_constant = 114514
+end
+    "#;
+
+    let mut parser = Parser::new(input);
+    parser.parse_root();
+
+    let (result, e) = parser.finish();
+    assert!(e.is_empty(), "Errors: {:?}", e);
+
+    assert_tree_matches(
+        result,
+        expect_file!["./test_data/parse_public_declarations.txt"],
+    );
 }

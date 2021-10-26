@@ -2,9 +2,10 @@ Root@0..296
   LF@0..1 "\n"
   BlockScope@1..296
     LetStmt@1..49
+      Visibility@1..1
       LetKw@1..4 "let"
       WS@4..5 " "
-      Name@5..6
+      Binding@5..6
         Ident@5..6 "x"
       WS@6..7 " "
       Assign@7..8 "="
@@ -14,17 +15,17 @@ Root@0..296
         WS@11..12 " "
         IfBranch@12..31
           Condition@12..15
-            VarExpr@12..15
+            IdentExpr@12..15
               Ident@12..15 "foo"
           Semicolon@15..16 ";"
           WS@16..17 " "
           BlockScope@17..31
             ExprStmt@17..30
               FunctionCallExpr@17..29
-                VarExpr@17..19
+                IdentExpr@17..19
                   Ident@17..19 "do"
                 WS@19..20 " "
-                VarExpr@20..29
+                IdentExpr@20..29
                   Ident@20..29 "something"
               Semicolon@29..30 ";"
             WS@30..31 " "
@@ -34,10 +35,10 @@ Root@0..296
           BlockScope@36..45
             ExprStmt@36..44
               FunctionCallExpr@36..43
-                VarExpr@36..40
+                IdentExpr@36..40
                   Ident@36..40 "give"
                 WS@40..41 " "
-                VarExpr@41..43
+                IdentExpr@41..43
                   Ident@41..43 "up"
               Semicolon@43..44 ";"
             WS@44..45 " "
@@ -55,7 +56,7 @@ Root@0..296
                 LParen@53..54 "("
                 FunctionCallExpr@54..67
                   DotExpr@54..65
-                    VarExpr@54..58
+                    IdentExpr@54..58
                       Ident@54..58 "Date"
                     Dot@58..59 "."
                     Ident@59..64 "today"
@@ -70,7 +71,7 @@ Root@0..296
               ParenExpr@72..88
                 LParen@72..73 "("
                 FunctionCallExpr@73..87
-                  VarExpr@73..77
+                  IdentExpr@73..77
                     Ident@73..77 "Date"
                   WS@77..78 " "
                   LiteralExpr@78..82
@@ -87,10 +88,10 @@ Root@0..296
           BlockScope@93..104
             ExprStmt@93..104
               FunctionCallExpr@93..103
-                VarExpr@93..100
+                IdentExpr@93..100
                   Ident@93..100 "wake_up"
                 WS@100..101 " "
-                VarExpr@101..103
+                IdentExpr@101..103
                   Ident@101..103 "me"
               LF@103..104 "\n"
         ElseKw@104..108 "else"
@@ -118,7 +119,7 @@ Root@0..296
           BlockScope@127..146
             ExprStmt@127..146
               FunctionCallExpr@127..145
-                VarExpr@127..132
+                IdentExpr@127..132
                   Ident@127..132 "print"
                 WS@132..133 " "
                 LiteralExpr@133..145
@@ -134,9 +135,10 @@ Root@0..296
       LF@159..160 "\n"
     LF@160..161 "\n"
     LetStmt@161..296
+      Visibility@161..161
       LetKw@161..164 "let"
       WS@164..165 " "
-      Name@165..166
+      Binding@165..166
         Ident@165..166 "y"
       WS@166..167 " "
       Assign@167..168 "="
@@ -160,7 +162,7 @@ Root@0..296
                 WS@189..190 " "
                 InKw@190..192 "in"
                 WS@192..193 " "
-                VarExpr@193..194
+                IdentExpr@193..194
                   Ident@193..194 "w"
               LF@194..195 "\n"
               BlockScope@195..252
@@ -172,7 +174,7 @@ Root@0..296
                     IfBranch@206..244
                       Condition@206..211
                         BinaryExpr@206..211
-                          VarExpr@206..207
+                          IdentExpr@206..207
                             Ident@206..207 "x"
                           WS@207..208 " "
                           Gt@208..209 ">"
@@ -203,7 +205,7 @@ Root@0..296
               IfBranch@263..288
                 Condition@263..269
                   BinaryExpr@263..269
-                    VarExpr@263..264
+                    IdentExpr@263..264
                       Ident@263..264 "w"
                     WS@264..265 " "
                     Eq@265..267 "=="

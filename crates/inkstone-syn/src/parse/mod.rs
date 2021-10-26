@@ -262,21 +262,26 @@ impl<'src> Parser<'src> {
         self.finish_node();
     }
 
-    fn parse_func_def(&mut self) {
+    fn parse_func_def(&mut self, checkpoint: Checkpoint) {
         // def name param1 params = body
-        self.start_node(FuncDef);
-        expect_or_recover_with!(self, DefKw, |_| true);
+        self.start_node_at(checkpoint, FuncDef);
+        expect_or_recover_with!(self, DefKw, |_| true, close_nodes = 1);
         self.eat_whitespace_or_line_feeds();
 
         self.start_node(Name);
-        expect_or_recover_with!(self, Ident, |t| t == Assign);
+        expect_or_recover_with!(self, Ident, |t| t == Assign, close_nodes = 2);
         self.finish_node();
 
         self.eat_whitespace_or_line_feeds();
         self.parse_param_list();
 
         self.eat_whitespace_or_line_feeds();
-        expect_or_recover_with!(self, Assign, |t| t.is_stmt_parsing_sync_token());
+        expect_or_recover_with!(
+            self,
+            Assign,
+            |t| t.is_stmt_parsing_sync_token(),
+            close_nodes = 1
+        );
         self.eat_whitespace_or_line_feeds();
 
         recover_with!(
@@ -295,7 +300,7 @@ impl<'src> Parser<'src> {
         self.start_node(BlockScope);
         self.eat_whitespace_or_line_feeds();
 
-        while !is_end_token(self.peek()) && self.peek() != Eof {
+        while !(is_end_token(self.peek()) || self.peek() == Eof) {
             self.parse_stmt();
             self.eat_whitespace_or_line_feeds();
         }
@@ -322,10 +327,10 @@ impl<'src> Parser<'src> {
         self.finish_node();
     }
 
-    fn parse_let_stmt(&mut self) {
+    fn parse_let_stmt(&mut self, checkpoint: Checkpoint) {
         // let x = expr
 
-        self.start_node(LetStmt);
+        self.start_node_at(checkpoint, LetStmt);
         expect_or_recover_with!(self, LetKw, |_| true, close_nodes = 1);
         self.eat_whitespace_or_line_feeds();
 
@@ -352,6 +357,21 @@ impl<'src> Parser<'src> {
         self.finish_node();
     }
 
+    fn parse_module_stmt(&mut self, checkpoint: Checkpoint) {
+        self.start_node_at(checkpoint, SynTag::ModuleDef);
+        expect_or_recover_with!(self, ModKw, |_| true, close_nodes = 1);
+        self.eat_whitespace_or_line_feeds();
+
+        self.start_node(Name);
+        expect_or_recover_with!(self, Ident, |t| t == EndKw, close_nodes = 2);
+        self.finish_node();
+        self.eat_whitespace_or_line_feeds();
+
+        self.parse_block_scope(|t| t == SynTag::EndKw);
+        expect_or_recover_with!(self, EndKw, |_| true, close_nodes = 1);
+        self.finish_node();
+    }
+
     fn parse_stmt_end(&mut self) {
         if self.eat_if(|t| matches!(t, Semicolon | LF | Eof)).is_none() {
             let peek = self.peek();
@@ -359,6 +379,33 @@ impl<'src> Parser<'src> {
             self.emit_error(ParseError::error(span, ParseErrorKind::Unexpected(peek)));
             self.recover_error(|t| matches!(t, Semicolon | LF | Eof));
             self.eat_if(|t| t == Semicolon || t == LF);
+        }
+    }
+
+    fn parse_optional_visibility(&mut self) {
+        // pub?
+        self.start_node(SynTag::Visibility);
+        if self.peek() == SynTag::PubKw {
+            self.start_node(SynTag::Pub);
+            self.eat();
+            self.finish_node();
+        }
+        self.finish_node();
+    }
+
+    fn parse_stmt_with_optional_visibility(&mut self) {
+        let checkpoint = self.b.checkpoint();
+        self.parse_optional_visibility();
+        self.eat_whitespace();
+        match self.peek() {
+            DefKw => self.parse_func_def(checkpoint),
+            LetKw => self.parse_let_stmt(checkpoint),
+            ModKw => self.parse_module_stmt(checkpoint),
+            _ => {
+                let span = self.lexer.peek_span().into_text_range();
+                self.emit_error(ParseError::error(span, ParseErrorKind::ExpectStmt));
+                self.recover_error(SynTag::is_stmt_parsing_sync_token);
+            }
         }
     }
 
@@ -376,12 +423,7 @@ impl<'src> Parser<'src> {
                 self.parse_stmt_end();
                 self.finish_node();
             }
-            DefKw => {
-                self.parse_func_def();
-            }
-            LetKw => {
-                self.parse_let_stmt();
-            }
+            DefKw | LetKw | PubKw | ModKw => self.parse_stmt_with_optional_visibility(),
             _ => {
                 let span = self.lexer.peek_span().into_text_range();
                 self.emit_error(ParseError::error(span, ParseErrorKind::ExpectStmt));
@@ -538,7 +580,7 @@ impl<'src> Parser<'src> {
                 self.parse_object_literal();
             }
             Ident => {
-                self.parse_name_or_namespace()?;
+                self.parse_ident()?;
             }
             LParen => {
                 self.parse_paren_expr_or_tuple();
@@ -784,7 +826,7 @@ impl<'src> Parser<'src> {
         self.finish_node();
     }
 
-    fn parse_name_or_namespace(&mut self) -> Result<()> {
+    fn parse_ident(&mut self) -> Result<()> {
         let ns_start = self.b.checkpoint();
         debug_assert_eq!(
             self.peek(),
@@ -793,23 +835,8 @@ impl<'src> Parser<'src> {
         );
         self.eat();
 
-        if self.peek() == DoubleColon {
-            self.start_node_at(ns_start, Namespace);
-            while self.try_eat_token(DoubleColon) {
-                match self.expect(Ident) {
-                    Ok(_) => {}
-                    Err(_) => {
-                        self.start_node(Error);
-                        self.eat();
-                        self.finish_node();
-                        self.finish_node();
-                        return Err(ParseErrorSignal);
-                    }
-                };
-            }
-        } else {
-            self.start_node_at(ns_start, VarExpr);
-        }
+        self.start_node_at(ns_start, IdentExpr);
+
         self.finish_node();
         Ok(())
     }
@@ -840,7 +867,7 @@ impl<'src> Parser<'src> {
             self.start_node_at(paren_start, TupleLiteralExpr);
             while self.try_eat_token(Comma) {
                 self.eat_whitespace_or_line_feeds();
-                if self.try_eat_token(RParen) {
+                if self.peek() == RParen {
                     break;
                 }
                 recover_with!(
@@ -851,6 +878,7 @@ impl<'src> Parser<'src> {
                 );
                 self.eat_whitespace_or_line_feeds();
             }
+            expect_or_recover_with!(self, RParen, |_| false, close_nodes = 1);
         } else if self.try_eat_token(RParen) {
             self.start_node_at(paren_start, ParenExpr);
         } else {

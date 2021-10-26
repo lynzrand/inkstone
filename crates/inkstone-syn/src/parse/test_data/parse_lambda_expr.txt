@@ -1,5 +1,5 @@
 FunctionCallExpr@0..39
-  VarExpr@0..3
+  IdentExpr@0..3
     Ident@0..3 "env"
   WS@3..4 " "
   LiteralExpr@4..10
@@ -15,9 +15,9 @@ FunctionCallExpr@0..39
     WS@29..30 " "
     FuncBody@30..39
       FunctionCallExpr@30..39
-        VarExpr@30..35
+        IdentExpr@30..35
           Ident@30..35 "print"
         WS@35..36 " "
-        VarExpr@36..39
+        IdentExpr@36..39
           Ident@36..39 "env"
 
