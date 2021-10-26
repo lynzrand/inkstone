@@ -14,15 +14,15 @@ As a result, Inkstone is here for an experimental general-purpose language, that
 
 Inkstone takes ideas from many other languages, like Lisp, OCaml, Elixir, Ruby, Haskell and Javascript.
 
-## Features
+## Goals / Target Features
 
-- Duck typing & prototype-based OOP
-- First class functions & continuations (fully async)
-- ADT
-  - Tuple, Vector, Map
-- Implicit params
-
-## OOP
+- Scripting language
+- Declarative game logic
+- Clean & markup-like grammar
+- Optional type checking
+- State snapshotting & loading
+- Nice tail recursion & fiber support
+- Updating snapshot environment without hassle
 
 OOP is achieved by using prototypes. Tuples and Maps can set their prototypes to use object methods.
 
