@@ -938,6 +938,8 @@ impl<'src> Parser<'src> {
 
     fn parse_key_value_pair(&mut self, in_parenthesis: bool) {
         // key: value
+        // -or-
+        // key
         self.start_node(KeyValuePair);
 
         self.start_node(Name);
