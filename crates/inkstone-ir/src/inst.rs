@@ -7,17 +7,27 @@ macro_rules! define_inst {
         $(#[$meta:meta])*
         // type names
         $ty_vis:vis $type:ident,
-        // item definition
-        $($name:ident
+        // instruction variant definition
+        $(
+            // metadata for this variant. Will be put inside the final enum
+            $(#[$variant_meta:meta])*
+            // variant name
+            $name:ident
             // params
-            $(($param_name:ident : $param:ty))?
+            $(($param_name:ident : $param:ident))?
             // number
-            $(= $n:literal)?),*
+            $(= $n:literal)?
+
+            // Pop and push specs
+            $(                   >> $push_cnt:literal)?
+            $(                            << $pop_cnt:literal)?
+        ),*
     ) => {
         $(#[$meta])*
         #[derive(Clone, Debug, PartialEq, Copy, IntoPrimitive, TryFromPrimitive)]
         #[repr(u8)]
         $ty_vis enum $type {$(
+            $(#[$variant_meta])*
             $name $(= $n)?
         ),*}
 
@@ -27,16 +37,34 @@ macro_rules! define_inst {
             }
 
             /// Returns the count of parameters of this instruction
-            pub fn has_param(inst: u8) -> bool {
+            pub fn param_type(inst: u8) -> Option<ParamType> {
+                #[allow(path_statements)]
                 match $type::try_from_primitive(inst) {$(
                     Ok($type::$name) => {
-                        let _res = false;
-                        $(let _res = true; let $param_name = ();)?
-                        _res
+                        None::<ParamType>
+                        $(; Some(ParamType::$param))?
                     }
                 ),*
-                    Err(_) => false
+                    Err(_) => None
                 }
+            }
+
+            pub fn pop_count(self) -> usize {
+                match self {$(
+                    Self::$name => {
+                        0
+                        $(; $pop_cnt)?
+                    }
+                ),*}
+            }
+
+            pub fn push_count(self) -> usize {
+                match self {$(
+                    Self::$name => {
+                        0
+                        $(; $push_cnt)?
+                    }
+                ),*}
             }
         }
 
@@ -54,9 +82,22 @@ macro_rules! define_inst {
 }
 
 macro_rules! param_types {
-    ($($name:ident, $ty:ty),*) => {};
+    ($ty_name:ident,
+        $($(#[$variant_meta:meta])* $name:ident, $ty:ty),*
+    ) => {
+        pub enum $ty_name {$(
+            $(#[$variant_meta])*
+            $name
+        ),*}
+    };
 }
 
+pub trait IParamType: Sized {
+    const PARAM_ENUM_TY: ParamType;
+    fn parse(slice: &[u8]) -> Option<(Self, usize)>;
+}
+
+/// Represents a local register
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Reg(u32);
 
@@ -66,78 +107,158 @@ impl Display for Reg {
     }
 }
 
+/// Represents an index of constant table
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Idx(u32);
+
+impl Display for Idx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", self.0)
+    }
+}
+
+param_types! {
+    ParamType,
+    /// A register in scope
+    Reg, Reg,
+    /// An index in constant table
+    Idx, Idx,
+    /// An integer constant
+    Int, i32,
+    /// Count or length of another value
+    Cnt, u32
+}
+
+// instruction definition.
+//
+// Each line is an instruction. `>>` and `<<` refers to the number of arguments
+// popped from and pushed into the stack.
+//
+// Each instruction may have at most 1 argument. It must be equal or less than
+// 32 bits.
 define_inst! {
     /// The list of instructions. Each instruction either has 0 or exactly 1 parameter.
     /// The parameter must be an integer, and will be encoded in VarInt encoding.
     pub Inst,
 
     // stack manipulation
-    Pop,
-    Dup,
+    /// Pop a value from stack
+    Pop                          >> 1,
+    /// Duplicate the stack top value
+    Dup                          >> 1     << 2,
 
     // constants
-    PushI64(num: i64),
-    PushF64(idx: u32),
-    PushConst(idx: u32),
-    PushTrue,
-    PushFalse,
-    PushNil,
+    /// Push a 32-bit integer constant
+    PushI32(num: Int)                     << 1,
+    /// Push a value inside the constant table
+    PushConst(idx: Idx)                   << 1,
+    /// Push boolean true
+    PushTrue                              << 1,
+    /// Push boolean false
+    PushFalse                             << 1,
+    /// Push nil
+    PushNil                               << 1,
 
     // arithmetic
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Pow,
+    /// Add stack top values, push result
+    Add                          >> 2     << 1,
+    /// Subtract stack top values, push result
+    Sub                          >> 2     << 1,
+    ///
+    Mul                          >> 2     << 1,
+    Div                          >> 2     << 1,
+    Pow                          >> 2     << 1,
 
-    BitAnd,
-    BitOr,
-    BitXor,
-    Shl,
-    Shr,
-    ShrA,
+    BitAnd                       >> 2     << 1,
+    BitOr                        >> 2     << 1,
+    BitXor                       >> 2     << 1,
+    Shl                          >> 2     << 1,
+    Shr                          >> 2     << 1,
+    ShrL                         >> 2     << 1,
 
-    And,
-    Or,
+    And                          >> 2     << 1,
+    Or                           >> 2     << 1,
 
     // compound types
-    TupleNew(len: u32),
-    ArrayNew,
-    MapNew,
-    SetPrototype,
-    GetPrototype,
+    /// Create a new tuple. Pops additional `len` items to populate the tuple.
+    TupleNew(len: Cnt)                    << 1,
+    /// Creates a new array. Pops additional `len` items into the array.
+    ArrayNew(len: Cnt)                    << 1,
+    /// Creates a new map.
+    MapNew                                << 1,
+    /// Set the prototype of the object at stack top
+    SetPrototype                 >> 2     << 1,
+    /// Get the prototype of the object at stack top
+    GetPrototype                 >> 1     << 1,
 
-    LoadField(idx: u32),
-    StoreField(idx: u32),
-    LoadFieldDyn,
-    StoreFieldDyn,
-    LoadFieldChain(len: u32),
+    /// Load a field from an object using the `idx`th constant in table as index.
+    LoadField(idx: Idx)          >> 1     << 1,
+    /// Store a field into an object using the `idx`th constant in table as index.
+    StoreField(idx: Idx)         >> 2,
+    /// Load a field from an object using a dynamic symbol or number as index.
+    LoadFieldDyn                 >> 2     << 1,
+    /// Storing a field from an object using a dynamic symbol or number as index.
+    StoreFieldDyn                >> 3,
+    /// Load an object using a chain of indices. Pops additional `len` items to form the path.
+    LoadFieldChain(len: Cnt)     >> 1,
 
     // load/stores
-    LoadLocal(reg: Reg),
-    StoreLocal(reg: Reg),
+    /// Load a value from the `reg`th slot of local scope
+    LoadLocal(reg: Reg)                   << 1,
+    /// Store a value into the `reg`th slot of local scope
+    StoreLocal(reg: Reg)         >> 1,
 
     // scope operations
-    ScopeNew,
-    ScopeLoad(idx: u32),
-    ScopeStore(idx: u32),
-    ScopeLoadDyn,
-    ScopeStoreDyn,
-    ScopeAssignAll,
+    /// Create a new scope that has `len` slots
+    ScopeNew(len: Cnt)                    << 1,
+    /// Load a value from the `reg`th slot of the given scope
+    ScopeLoad(idx: Reg)          >> 1     << 1,
+    /// Store a value into the `reg`th slot of the given scope
+    ScopeStore(idx: Reg)         >> 2,
+    /// Load a value from a slot of the given scope
+    ScopeLoadDyn                 >> 2     << 1,
+    /// Store a value into a slot of the given scope
+    ScopeStoreDyn                >> 3,
+    /// Assign all values in the first scope into the second scope
+    ScopeAssignAll               >> 2,
 
-    PushGlobalScope,
-    PushModuleScope,
+    /// Push the global scope onto stack
+    PushGlobalScope                       << 1,
+    /// Push the current module scope onto stack
+    PushModuleScope                       << 1,
+    /// Push the local function scope onto stack
+    PushLocalScope                        << 1,
 
     // function
-    Call(n_args: u32),
-    TailCall(n_args: u32),
+    /// Calls the function using the given arguments
+    Call(n_args: Cnt)            >> 1     << 1,
+    /// Calls the function using the given arguments, with `self` bound to the
+    /// 1st argument if possible.
+    CallMethod(n_args: Cnt)      >> 1     << 1,
+    /// Return this function call with the result of the function using the given arguments
+    TailCall(n_args: Cnt)        >> 1,
+    /// Return this function call with the result of the function using the given arguments
+    /// with `self` bound to the 1st argument if possible
+    TailCallMethod(n_args: Cnt)  >> 1,
 
-    Return,
+    /// Return the current function
+    Return                       >> 1,
 
     // tasks
-    Yield,
-    NewTask,
-    JoinTask,
+    /// Yield the current task with the given value. Returns the param
+    /// the waker provides, or `nil` if no value was provided.
+    Yield                        >> 1     << 1,
+    /// Create a new task using the given closure.
+    NewTask                      >> 1     << 1,
+    /// Wake and poll the given task with the given parameter. Returns `(:pending, value)`
+    /// if the task yields, or `(:completed, return_value)` if the task completes.
+    PollTask                     >> 2     << 1,
+    /// Detach the given task, allowing it to be polled to complete by the runtime.
+    /// The task will be polled with no value every time it's waken.
+    DetachTask                   >> 1,
+    /// Wake the given task.
+    WakeTask                     >> 1,
 
+    /// Do nothing.
     Nop
 }
