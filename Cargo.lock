@@ -174,7 +174,7 @@ name = "inkstone"
 version = "0.1.0"
 
 [[package]]
-name = "inkstone-ir"
+name = "inkstone-bytecode"
 version = "0.1.0"
 dependencies = [
  "bitflags",
@@ -184,10 +184,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "inkstone-ir-gen"
+name = "inkstone-codegen"
 version = "0.1.0"
 dependencies = [
- "inkstone-ir",
+ "inkstone-bytecode",
  "inkstone-syn",
 ]
 
