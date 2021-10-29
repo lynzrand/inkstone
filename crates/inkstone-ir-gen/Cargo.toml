@@ -6,3 +6,5 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+inkstone-ir = { path = "../inkstone-ir" }
+inkstone-syn = { path = "../inkstone-syn" }

@@ -1,7 +1,7 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+use inkstone_syn::ast::BlockScope;
+
+pub struct IrGen {}
+
+pub fn compile_chunk(chunk: BlockScope) {
+    
 }
