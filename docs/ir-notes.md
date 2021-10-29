@@ -1,8 +1,23 @@
 # Inkstone VM & Bytecode design
 
+## Bytecode Design
+
+- Single-byte
+- Zero or one **integer** operand
+- Operand is variable-length encoded
+  - Either LEB128 or a compact 1/2/4/8 byte schema
+
+## Metadata Design
+
+Mappings between bytecode and text are stored as an ordered array. Retrieving text offset data is just binary searching.
+
+Mappings between scope slots and variable names is stored as a consecutive array. A reverse index is constructed at runtime.
+
 ## Scopes
 
-In Inkstone, functions can have variables referenced in closures.
+In Inkstone, functions can have variables referenced in closures. Variables are stored in fixed-size data structures called scopes.
+
+Scopes have their size determined at creation time. Each local variable is stored in a slot of its corresponding scope. Scopes are reference types in IR. In rare cases (e.g. REPLs) the scope can be expanded at runtime. This is done by resizing the underlying array "manually" each time.
 
 ```ruby
 # main.ist
