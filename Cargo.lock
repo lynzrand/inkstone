@@ -170,6 +170,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
+name = "highway"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3461b968f695ca312b968503261f5a345de0f02a39dbaa3021f20d53b426395d"
+
+[[package]]
 name = "inkstone"
 version = "0.1.0"
 
@@ -187,6 +193,7 @@ dependencies = [
 name = "inkstone-codegen"
 version = "0.1.0"
 dependencies = [
+ "highway",
  "inkstone-bytecode",
  "inkstone-syn",
  "rowan",

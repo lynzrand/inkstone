@@ -42,10 +42,20 @@ struct ScopeMap<'a> {
 struct LexicalScope<'a> {
     map: &'a mut ScopeMap<'a>,
     super_scope: Option<&'a LexicalScope<'a>>,
-    mapping: BTreeMap<SmolStr, usize>,
+    mapping: HashMap<SmolStr, usize>,
 }
 
 #[derive(Debug)]
 struct ScopeEntry {}
 
-fn compile_function_body(body: BlockScope, ctx: &FunctionCompileCtx) {}
+impl<'a> FunctionCompileCtx<'a> {
+    pub fn new(super_scope: Option<&'a ScopeMap<'a>>) -> Self {
+        FunctionCompileCtx {
+            constants: ConstantTableBuilder::default(),
+            scope: ScopeMap {
+                super_scope,
+                mapping: Default::default(),
+            },
+        }
+    }
+}

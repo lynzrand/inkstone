@@ -1,9 +1,5 @@
 pub mod inst;
 
-use inst::Inst;
-use slab::Slab;
-use std::fmt::Display;
-
 #[derive(Debug)]
 pub struct Function {
     pub name: Option<String>,
@@ -12,8 +8,11 @@ pub struct Function {
     pub binds_self: bool,
     pub has_rest_param: bool,
     pub constants: Vec<()>,
+    pub metadata: Option<FunctionMetadata>,
 }
 
+#[derive(Debug)]
 pub struct ConstantTable {}
 
+#[derive(Debug)]
 pub struct FunctionMetadata {}

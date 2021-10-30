@@ -11,3 +11,4 @@ inkstone-syn = { path = "../inkstone-syn" }
 
 smol_str = "0.1.18"
 rowan = "0.14.1"
+highway = "0.6"

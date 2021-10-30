@@ -111,7 +111,7 @@ pub let Result = {
 
 The following pseudocode should do the job.
 
-```
+```rust
 #[repr(C)]
 struct Closure<ReturnTy, Params...> {
     env: Gc<ClosureCapture>,
