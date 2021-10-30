@@ -1,4 +1,7 @@
+use std::collections::{BTreeMap, HashMap};
+
 use inkstone_syn::ast::BlockScope;
+use smol_str::SmolStr;
 
 pub struct IrGen {}
 
@@ -8,10 +11,41 @@ pub struct ChunkContext {
 
 /// Compile the given chunk
 pub fn compile_chunk(chunk: BlockScope, ctx: ChunkContext) {
-    let chunk_as_function = FunctionCompileCtx {};
-    compile_function_body(chunk, chunk_as_function);
+    let chunk_as_function = FunctionCompileCtx {
+        ..Default::default()
+    };
+    compile_function_body(chunk, &chunk_as_function);
 }
 
-struct FunctionCompileCtx {}
+/// The context used when building a function
+#[derive(Debug, Default)]
+struct FunctionCompileCtx<'a> {
+    constants: ConstantTableBuilder,
+    scope: ScopeMap<'a>,
+}
 
-fn compile_function_body(body: BlockScope, ctx: FunctionCompileCtx) {}
+/// Type used to build a constant table
+#[derive(Debug, Default)]
+struct ConstantTableBuilder {}
+
+/// Additional data of a lexical scope that should own a `Scope` to hold local
+/// variables in itself and its children scopes.
+#[derive(Debug, Default)]
+struct ScopeMap<'a> {
+    super_scope: Option<&'a ScopeMap<'a>>,
+    mapping: Vec<ScopeEntry>,
+}
+
+/// A lexical scope that holds local variables. variables are stored in the
+/// closest [`ScopeMap`] above current scope.
+#[derive(Debug)]
+struct LexicalScope<'a> {
+    map: &'a mut ScopeMap<'a>,
+    super_scope: Option<&'a LexicalScope<'a>>,
+    mapping: BTreeMap<SmolStr, usize>,
+}
+
+#[derive(Debug)]
+struct ScopeEntry {}
+
+fn compile_function_body(body: BlockScope, ctx: &FunctionCompileCtx) {}

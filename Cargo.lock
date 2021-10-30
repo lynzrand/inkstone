@@ -189,6 +189,8 @@ version = "0.1.0"
 dependencies = [
  "inkstone-bytecode",
  "inkstone-syn",
+ "rowan",
+ "smol_str",
 ]
 
 [[package]]
