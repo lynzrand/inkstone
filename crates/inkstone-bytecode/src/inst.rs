@@ -1,8 +1,12 @@
 mod param;
 
+use std::io::Write;
+
 use integer_encoding::VarInt;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use param::ParamType;
+
+use self::param::IParamType;
 
 macro_rules! define_inst {
     (
@@ -81,6 +85,11 @@ macro_rules! define_inst {
             }
         }
     };
+}
+
+fn write_inst(mut w: impl Write, inst: Inst, param: impl IParamType) -> std::io::Result<()> {
+    w.write_all(&[inst as u8])?;
+    param.write(w)
 }
 
 // instruction definition.

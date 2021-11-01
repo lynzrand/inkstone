@@ -1,7 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::scope::{LexicalScope, ScopeMap, ScopeType};
+use inkstone_bytecode::inst::Inst;
 use inkstone_syn::ast::{AstNode, BlockScope, Expr, FuncDef, IdentExpr, Stmt};
+
+struct BasicBlock {
+    inst: Vec<u8>,
+    jmp: Inst,
+}
 
 /// Type used to build a constant table
 #[derive(Debug, Default)]
