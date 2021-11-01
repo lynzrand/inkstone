@@ -1,7 +1,7 @@
 use rowan::TextRange;
 
 use crate::SynTag;
-use crate::{SyntaxNode, SyntaxNodeChildren, SyntaxToken};
+use crate::{SyntaxNode, SyntaxToken};
 
 /// Generate boilerplate code for this ast node.
 ///
@@ -167,7 +167,7 @@ ast_node!(Expr, {
     SynTag::BinaryExpr       => (Binary, BinaryExpr),
     SynTag::UnaryExpr        => (Unary, UnaryExpr),
     SynTag::FunctionCallExpr => (FunctionCall, FunctionCallExpr),
-    SynTag::IdentExpr          => (Var, BinaryExpr),
+    SynTag::IdentExpr        => (Ident, IdentExpr),
     SynTag::Namespace        => (Namespace, NamespaceExpr),
     SynTag::SubscriptExpr    => (Subscript, SubscriptExpr),
     SynTag::DotExpr          => (Dot, DotExpr),
@@ -201,8 +201,8 @@ impl FunctionCallExpr {
     impl_child!(n, params, Expr, skip = 1);
 }
 
-ast_node!(VarExpr, SynTag::IdentExpr);
-impl VarExpr {
+ast_node!(IdentExpr, SynTag::IdentExpr);
+impl IdentExpr {
     impl_child!(tok1, ident, |o| o == SynTag::Ident);
 }
 
@@ -222,6 +222,8 @@ impl DotExpr {
     impl_child!(nth, parent, Expr, 1);
     impl_child!(tok1, subscript, |o| o == SynTag::Ident);
 }
+
+ast_node!(Chunk, SynTag::BlockScope);
 
 ast_node!(IfExpr, SynTag::IfExpr);
 ast_node!(WhileLoopExpr, SynTag::WhileLoopExpr);
