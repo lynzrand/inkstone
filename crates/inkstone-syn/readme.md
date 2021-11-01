@@ -1,3 +1,3 @@
 # Inkstone-syn
 
-`inkstone-syn` is the syntax library for Inkstone.
+`inkstone-syn` contains code for lexing Inkstone code into tokens, then parsing into both untyped and type abstract syntax trees.
