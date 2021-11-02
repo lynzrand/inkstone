@@ -1,16 +1,22 @@
-use byteorder::{ReadBytesExt, WriteBytesExt, LE};
+use bytes::{Buf, BufMut};
 use std::fmt::Display;
-use std::io::{Read, Write};
 
-pub(crate) trait IParamType: Sized {
+pub trait IParamType: Sized {
     const PARAM_ENUM_TY: ParamType;
 
     const MAX_RESERVE_LEN: usize;
 
-    fn parse(r: impl Read) -> std::io::Result<Self>;
-    fn write(&self, w: impl Write) -> std::io::Result<()>;
+    /// Validate that the buffer's head pointer contains valid param
+    fn validate(r: impl Buf) -> bool;
+
+    /// Parse the param from the buffer's head pointer. **Panics if it doesn't succeed.**
+    fn parse(r: impl Buf) -> Self;
+
+    /// Write the param into the given buffer.
+    fn write(&self, w: impl BufMut);
 }
 
+#[allow(unused)]
 pub(crate) fn u32_write_length(v: u32) -> usize {
     match v {
         0..=0x7f => 1,
@@ -20,6 +26,7 @@ pub(crate) fn u32_write_length(v: u32) -> usize {
     }
 }
 
+#[allow(unused)]
 pub(crate) fn u64_write_length(v: u64) -> usize {
     match v {
         0x1_0000_0000.. => 9,
@@ -27,46 +34,44 @@ pub(crate) fn u64_write_length(v: u64) -> usize {
     }
 }
 
-pub(crate) fn write_u32(v: u32, mut buf: impl Write) -> std::io::Result<()> {
+pub(crate) fn write_u32(v: u32, mut buf: impl BufMut) {
     match v {
         0..=0x7f => {
-            buf.write_u8(v as u8)?;
+            buf.put_u8(v as u8);
         }
         0x80..=0xff => {
-            buf.write_u8(0x81)?;
-            buf.write_u8(v as u8)?;
+            buf.put_u8(0x81);
+            buf.put_u8(v as u8);
         }
         0x100..=0xffff => {
-            buf.write_u8(0x82)?;
-            buf.write_u16::<LE>(v as u16)?;
+            buf.put_u8(0x82);
+            buf.put_u16_le(v as u16);
         }
         0x10000..=0xffffffff => {
-            buf.write_u8(0x83)?;
-            buf.write_u32::<LE>(v)?;
+            buf.put_u8(0x83);
+            buf.put_u32_le(v);
         }
     }
-    Ok(())
 }
 
-pub(crate) fn write_i32(v: i32, mut buf: impl Write) -> std::io::Result<()> {
+pub(crate) fn write_i32(v: i32, mut buf: impl BufMut) {
     match v {
         -0x40..=0x3f => {
-            buf.write_u8(i8_to_u7(v as i8))?;
+            buf.put_u8(i8_to_u7(v as i8));
         }
         0x40..=0x7f | -0x80..=-0x41 => {
-            buf.write_u8(0x81)?;
-            buf.write_i8(v as i8)?;
+            buf.put_u8(0x81);
+            buf.put_i8(v as i8);
         }
         0x80..=0x7fff | -0x8000..=-0x81 => {
-            buf.write_u8(0x82)?;
-            buf.write_i16::<LE>(v as i16)?;
+            buf.put_u8(0x82);
+            buf.put_i16_le(v as i16);
         }
         _ => {
-            buf.write_u8(0x83)?;
-            buf.write_i32::<LE>(v)?;
+            buf.put_u8(0x83);
+            buf.put_i32_le(v);
         }
     }
-    Ok(())
 }
 
 /// Convert a compressed 7-bit unsigned integer into 8-bit integer
@@ -84,27 +89,26 @@ fn i8_to_u7(i8: i8) -> u8 {
     (i8 as u8) & 0x7f
 }
 
-/// Parse this param from buffer. Returns the parsed value and bytes to advance
-/// if succeeds.
-///
-/// Defaults to parsing a 8, 16 or 32-bit little endian value:
-///
-/// - `0x00 -- 0x7f` are identified as regular `u7` values
-/// - `0x81` indicates the next 1 bytes to be parsed as a `u8`
-/// - `0x82` indicates the next 2 bytes to be parsed as a `u16`
-/// - `0x83` indicates the next 4 bytes to be parsed as a `u32`
-fn read_u32(mut buf: impl Read) -> std::io::Result<u32> {
-    let n = buf.read_u8()?;
+fn validate_u32(mut buf: impl Buf) -> bool {
+    fn check_and_advance(mut buf: impl Buf, n: usize) -> bool {
+        if buf.remaining() >= n {
+            buf.advance(n);
+            true
+        } else {
+            false
+        }
+    }
+    let n = buf.get_u8();
     if n & 0x80 == 0 {
-        Ok(n as u32)
+        true
     } else if n == 0x81 {
-        Ok(buf.read_u8()? as u32)
+        check_and_advance(buf, 1)
     } else if n == 0x82 {
-        Ok(buf.read_u16::<LE>()? as u32)
+        check_and_advance(buf, 2)
     } else if n == 0x83 {
-        Ok(buf.read_u32::<LE>()?)
+        check_and_advance(buf, 4)
     } else {
-        Err(std::io::ErrorKind::InvalidData.into())
+        false
     }
 }
 
@@ -117,18 +121,42 @@ fn read_u32(mut buf: impl Read) -> std::io::Result<u32> {
 /// - `0x81` indicates the next 1 bytes to be parsed as a `u8`
 /// - `0x82` indicates the next 2 bytes to be parsed as a `u16`
 /// - `0x83` indicates the next 4 bytes to be parsed as a `u32`
-fn read_i32(mut buf: impl Read) -> std::io::Result<i32> {
-    let n = buf.read_u8()?;
+fn read_u32(mut buf: impl Buf) -> u32 {
+    let n = buf.get_u8();
     if n & 0x80 == 0 {
-        Ok(u7_to_i8(n) as i32)
+        n as u32
     } else if n == 0x81 {
-        Ok(buf.read_i8()? as i32)
+        buf.get_u8() as u32
     } else if n == 0x82 {
-        Ok(buf.read_i16::<LE>()? as i32)
+        buf.get_u16_le() as u32
     } else if n == 0x83 {
-        Ok(buf.read_i32::<LE>()?)
+        buf.get_u32_le()
     } else {
-        Err(std::io::ErrorKind::InvalidData.into())
+        panic!("Invalid data")
+    }
+}
+
+/// Parse this param from buffer. Returns the parsed value and bytes to advance
+/// if succeeds.
+///
+/// Defaults to parsing a 8, 16 or 32-bit little endian value:
+///
+/// - `0x00 -- 0x7f` are identified as regular `u7` values
+/// - `0x81` indicates the next 1 bytes to be parsed as a `u8`
+/// - `0x82` indicates the next 2 bytes to be parsed as a `u16`
+/// - `0x83` indicates the next 4 bytes to be parsed as a `u32`
+fn read_i32(mut buf: impl Buf) -> i32 {
+    let n = buf.get_u8();
+    if n & 0x80 == 0 {
+        u7_to_i8(n) as i32
+    } else if n == 0x81 {
+        buf.get_i8() as i32
+    } else if n == 0x82 {
+        buf.get_i16_le() as i32
+    } else if n == 0x83 {
+        buf.get_i32_le()
+    } else {
+        panic!("invalid data")
     }
 }
 
@@ -140,6 +168,14 @@ macro_rules! param_types {
             $(#[$variant_meta])*
             $name
         ),*}
+
+        impl $ty_name {
+            pub fn validate(self, buf: impl Buf) -> bool {
+                match self {$(
+                    Self::$name => <$ty>::validate(buf),
+                )*}
+            }
+        }
     };
 }
 
@@ -160,11 +196,15 @@ impl IParamType for Reg {
 
     const MAX_RESERVE_LEN: usize = 5;
 
-    fn parse(r: impl Read) -> std::io::Result<Self> {
-        read_u32(r).map(Reg)
+    fn validate(r: impl Buf) -> bool {
+        validate_u32(r)
     }
 
-    fn write(&self, w: impl Write) -> std::io::Result<()> {
+    fn parse(r: impl Buf) -> Self {
+        Reg(read_u32(r))
+    }
+
+    fn write(&self, w: impl BufMut) {
         write_u32(self.0, w)
     }
 }
@@ -183,11 +223,15 @@ impl IParamType for Idx {
     const PARAM_ENUM_TY: ParamType = ParamType::Idx;
     const MAX_RESERVE_LEN: usize = U32_MAX_RESERVE_LEN;
 
-    fn parse(r: impl Read) -> std::io::Result<Self> {
-        read_u32(r).map(Idx)
+    fn validate(r: impl Buf) -> bool {
+        validate_u32(r)
     }
 
-    fn write(&self, w: impl Write) -> std::io::Result<()> {
+    fn parse(r: impl Buf) -> Self {
+        Idx(read_u32(r))
+    }
+
+    fn write(&self, w: impl BufMut) {
         write_u32(self.0, w)
     }
 }
@@ -196,11 +240,15 @@ impl IParamType for u32 {
     const PARAM_ENUM_TY: ParamType = ParamType::Cnt;
     const MAX_RESERVE_LEN: usize = U32_MAX_RESERVE_LEN;
 
-    fn parse(r: impl Read) -> std::io::Result<Self> {
+    fn validate(r: impl Buf) -> bool {
+        validate_u32(r)
+    }
+
+    fn parse(r: impl Buf) -> Self {
         read_u32(r)
     }
 
-    fn write(&self, w: impl Write) -> std::io::Result<()> {
+    fn write(&self, w: impl BufMut) {
         write_u32(*self, w)
     }
 }
@@ -209,11 +257,15 @@ impl IParamType for i32 {
     const PARAM_ENUM_TY: ParamType = ParamType::Int;
     const MAX_RESERVE_LEN: usize = U32_MAX_RESERVE_LEN;
 
-    fn parse(r: impl Read) -> std::io::Result<Self> {
+    fn validate(r: impl Buf) -> bool {
+        validate_u32(r)
+    }
+
+    fn parse(r: impl Buf) -> Self {
         read_i32(r)
     }
 
-    fn write(&self, w: impl Write) -> std::io::Result<()> {
+    fn write(&self, w: impl BufMut) {
         write_i32(*self, w)
     }
 }
@@ -223,13 +275,13 @@ impl IParamType for () {
 
     const MAX_RESERVE_LEN: usize = 0;
 
-    fn parse(_r: impl Read) -> std::io::Result<Self> {
-        Ok(())
+    fn validate(r: impl Buf) -> bool {
+        true
     }
 
-    fn write(&self, _w: impl Write) -> std::io::Result<()> {
-        Ok(())
-    }
+    fn parse(_r: impl Buf) -> Self {}
+
+    fn write(&self, _w: impl BufMut) {}
 }
 
 param_types! {

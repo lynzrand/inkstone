@@ -1,12 +1,11 @@
 mod param;
 
-use std::io::Write;
-
+use bytes::BufMut;
 use integer_encoding::VarInt;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use param::ParamType;
 
-use self::param::IParamType;
+pub use self::param::IParamType;
+pub use param::ParamType;
 
 macro_rules! define_inst {
     (
@@ -25,8 +24,8 @@ macro_rules! define_inst {
             $(= $n:literal)?
 
             // Pop and push specs
-            $(                   >> $push_cnt:literal)?
-            $(                            << $pop_cnt:literal)?
+            $(>> $push_cnt:literal)?
+            $(<< $pop_cnt:literal)?
         ),*
     ) => {
         $(#[$meta])*
@@ -38,20 +37,15 @@ macro_rules! define_inst {
         ),*}
 
         impl $type {
-            pub fn parse_param<P: VarInt>(self, buf: &[u8]) -> Option<(P, usize)> {
-                P::decode_var(buf)
-            }
-
             /// Returns the count of parameters of this instruction
-            pub fn param_type(inst: u8) -> Option<ParamType> {
+            pub fn param_type(self) -> Option<ParamType> {
                 #[allow(path_statements)]
-                match $type::try_from_primitive(inst) {$(
-                    Ok($type::$name) => {
+                match self {$(
+                    $type::$name => {
                         None::<ParamType>
                         $(; Some(ParamType::$param))?
                     }
                 ),*
-                    Err(_) => None
                 }
             }
 
@@ -87,8 +81,8 @@ macro_rules! define_inst {
     };
 }
 
-fn write_inst(mut w: impl Write, inst: Inst, param: impl IParamType) -> std::io::Result<()> {
-    w.write_all(&[inst as u8])?;
+pub fn write_inst(mut w: impl BufMut, inst: Inst, param: impl IParamType) {
+    w.put_u8(inst as u8);
     param.write(w)
 }
 

@@ -16,3 +16,7 @@ pub struct ConstantTable {}
 
 #[derive(Debug)]
 pub struct FunctionMetadata {}
+
+pub mod reexports {
+    pub use num_enum::{FromPrimitive, TryFromPrimitive};
+}

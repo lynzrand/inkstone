@@ -18,19 +18,19 @@ pub enum ScopeType {
 /// Additional data of a lexical scope that should own a `Scope` to hold local
 /// variables in itself and its children scopes.
 #[derive(Debug)]
-pub struct ScopeMap<'a> {
+pub struct Scope<'a> {
     /// A unique scope ID inside this compilation unit
     id: u32,
     /// Type of this scope
     ty: ScopeType,
-    super_scope: Option<&'a ScopeMap<'a>>,
+    super_scope: Option<&'a Scope<'a>>,
     locals: Vec<ScopeEntry>,
     scope_stack: Vec1<LexicalScope>,
 }
 
-impl<'a> ScopeMap<'a> {
-    pub fn new(id: u32, scope_type: ScopeType, super_scope: Option<&'a ScopeMap<'a>>) -> Self {
-        ScopeMap {
+impl<'a> Scope<'a> {
+    pub fn new(id: u32, scope_type: ScopeType, super_scope: Option<&'a Scope<'a>>) -> Self {
+        Scope {
             id,
             ty: scope_type,
             super_scope,
@@ -72,9 +72,8 @@ impl<'a> ScopeMap<'a> {
     /// Get the definition of a name in local scope.
     pub fn get_local(&self, name: &str) -> Option<(usize, &ScopeEntry)> {
         for scope in self.scope_stack.iter().rev() {
-            match scope.mapping.get(name) {
-                Some(idx) => return self.locals.get(*idx).map(|entry| (*idx, entry)),
-                None => {}
+            if let Some(idx) = scope.mapping.get(name) {
+                return self.locals.get(*idx).map(|entry| (*idx, entry));
             }
         }
         None
@@ -93,4 +92,4 @@ pub struct LexicalScope {
 }
 
 #[derive(Debug)]
-struct ScopeEntry {}
+pub struct ScopeEntry {}
