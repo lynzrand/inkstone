@@ -29,6 +29,12 @@ macro_rules! ast_node {
                 &self.node
             }
         }
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.node)
+            }
+        }
     };
     ($name:ident, {
         $( $kind:pat => ($kind_name:ident, $ty:ty) ),*
@@ -61,6 +67,12 @@ macro_rules! ast_node {
                 match self { $(
                     Self::$kind_name(val) => val.node(),
                 )* }
+            }
+        }
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.node())
             }
         }
     }
@@ -210,6 +222,7 @@ ast_node!(UseStmt, SynTag::UseStmt);
 
 ast_node!(Expr, {
     SynTag::BinaryExpr       => (Binary, BinaryExpr),
+    SynTag::AssignExpr       => (Assign, AssignExpr),
     SynTag::UnaryExpr        => (Unary, UnaryExpr),
     SynTag::FunctionCallExpr => (FunctionCall, FunctionCallExpr),
     SynTag::IdentExpr        => (Ident, IdentExpr),
@@ -229,6 +242,12 @@ impl BinaryExpr {
     });
     impl_child!(nth!, lhs, Expr, 1);
     impl_child!(nth!, rhs, Expr, 2);
+}
+
+ast_node!(AssignExpr, SynTag::AssignExpr);
+impl AssignExpr {
+    impl_child!(nth!, tgt, Expr, 1);
+    impl_child!(nth!, val, Expr, 2);
 }
 
 ast_node!(UnaryExpr, SynTag::UnaryExpr);
@@ -268,8 +287,20 @@ ast_node!(IfExpr, SynTag::IfExpr);
 ast_node!(WhileLoopExpr, SynTag::WhileLoopExpr);
 ast_node!(ForLoopExpr, SynTag::ForLoopExpr);
 ast_node!(BlockExpr, SynTag::BlockExpr);
+
 ast_node!(LiteralExpr, SynTag::LiteralExpr);
+impl LiteralExpr {
+    impl_child!(tok1, as_int, |o| o == SynTag::Int);
+    impl_child!(tok1, as_float, |o| o == SynTag::Float);
+    impl_child!(tok1, as_string, |o| o == SynTag::StringLiteral);
+    impl_child!(tok1, as_symbol, |o| o == SynTag::Symbol);
+    impl_child!(tok1, as_true, |o| o == SynTag::TrueKw);
+    impl_child!(tok1, as_false, |o| o == SynTag::FalseKw);
+}
 
 ast_node!(Binding, SynTag::Binding);
+impl Binding {
+    impl_child!(tok1, name, |o| o == SynTag::Ident);
+}
 
 ast_node!(Name, SynTag::Name);

@@ -174,6 +174,9 @@ pub enum SynTag {
     ParenExpr,
     UnaryExpr,
     BinaryExpr,
+    // AssignExpr is separated from the rest because it takes a LValue as its
+    // 1st operand.
+    AssignExpr,
     FunctionCallExpr,
     IdentExpr,
     DotExpr,

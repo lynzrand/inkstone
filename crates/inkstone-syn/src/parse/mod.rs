@@ -520,6 +520,17 @@ impl<'src> Parser<'src> {
                         );
                         self.eat_whitespace_in_parenthesis(in_parenthesis);
                     }
+                } else if self.peek() == Assign {
+                    self.start_node_at(start, AssignExpr);
+
+                    self.eat();
+                    self.eat_whitespace_or_line_feeds();
+
+                    recover_with!(
+                        self,
+                        self.parse_expr_pratt(rbp, in_parenthesis, in_function_call),
+                        close_nodes = 1
+                    );
                 } else {
                     self.start_node_at(start, BinaryExpr);
                     self.eat();
