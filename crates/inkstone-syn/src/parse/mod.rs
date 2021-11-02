@@ -460,7 +460,11 @@ impl<'src> Parser<'src> {
             let tok = self.peek();
             if let Some(bp) = prefix_binding_power(tok) {
                 self.start_node(UnaryExpr);
+
+                self.start_node(UnaryOp);
                 self.eat();
+                self.finish_node();
+
                 self.eat_whitespace_or_line_feeds();
                 recover_with!(
                     self,
@@ -483,7 +487,10 @@ impl<'src> Parser<'src> {
                 }
 
                 self.start_node_at(start, UnaryExpr);
+
+                self.start_node(UnaryOp);
                 self.eat();
+                self.finish_node();
 
                 self.finish_node();
             } else if let Some((lbp, rbp)) =
@@ -533,7 +540,11 @@ impl<'src> Parser<'src> {
                     );
                 } else {
                     self.start_node_at(start, BinaryExpr);
+
+                    self.start_node(BinaryOp);
                     self.eat();
+                    self.finish_node();
+
                     self.eat_whitespace_or_line_feeds();
                     recover_with!(
                         self,

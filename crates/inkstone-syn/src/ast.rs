@@ -288,17 +288,40 @@ ast_node!(Expr, {
 
 ast_node!(BinaryExpr, SynTag::BinaryExpr);
 impl BinaryExpr {
-    impl_child!(tok1!, op, |o: SynTag| {
-        crate::parse::pratt_util::infix_binding_power(o).is_some()
-    });
-    impl_child!(nth!, lhs, Expr, 1);
-    impl_child!(nth!, rhs, Expr, 2);
+    impl_child!(1!, op, BinaryOp);
+    impl_child!(nth!, lhs, Expr, 0);
+    impl_child!(nth!, rhs, Expr, 1);
 }
+
+ast_node!(token: BinaryOp, BinaryOpKind, {
+    SynTag::OrKw => OrKw,
+    SynTag::AndKw => AndKw,
+
+    SynTag::Lt => Lt,
+    SynTag::Gt => Gt,
+    SynTag::Le => Le,
+    SynTag::Ge => Ge,
+    SynTag::Eq => Eq,
+    SynTag::Neq => Ne,
+
+    SynTag::Add => Add,
+    SynTag::Sub => Sub,
+
+    SynTag::Amp => BitAnd,
+    SynTag::Bar => BitOr,
+    SynTag::BitXor => BitXor,
+
+    SynTag::Mul => Mul,
+    SynTag::Div => Div,
+    SynTag::Rem => Rem,
+
+    SynTag::Pow => Pow
+});
 
 ast_node!(AssignExpr, SynTag::AssignExpr);
 impl AssignExpr {
-    impl_child!(nth!, tgt, Expr, 1);
-    impl_child!(nth!, val, Expr, 2);
+    impl_child!(nth!, tgt, Expr, 0);
+    impl_child!(nth!, val, Expr, 1);
 }
 
 ast_node!(UnaryExpr, SynTag::UnaryExpr);
@@ -306,8 +329,15 @@ impl UnaryExpr {
     impl_child!(tok1!, op, |o: SynTag| {
         crate::parse::pratt_util::infix_binding_power(o).is_some()
     });
-    impl_child!(nth!, lhs, Expr, 1);
+    impl_child!(1!, lhs, Expr);
 }
+
+ast_node!(token: UnaryOp, UnaryOpKind, {
+    SynTag::NotKw   => NotKw,
+    SynTag::Add     => Pos,
+    SynTag::Sub     => Neg,
+    SynTag::Not     => Not
+});
 
 ast_node!(FunctionCallExpr, SynTag::FunctionCallExpr);
 impl FunctionCallExpr {

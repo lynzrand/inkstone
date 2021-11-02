@@ -172,6 +172,10 @@ pub enum SynTag {
     Condition,
     Binding,
 
+    // Binary Op
+    BinaryOp,
+    UnaryOp,
+
     // Expressions
     ParenExpr,
     UnaryExpr,
