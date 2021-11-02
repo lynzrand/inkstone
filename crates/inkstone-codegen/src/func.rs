@@ -1,6 +1,9 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 
 use crate::scope::{LexicalScope, Scope, ScopeType};
+use crate::SymbolListBuilder;
 use inkstone_bytecode::inst::{write_inst, IParamType, Inst};
 use inkstone_syn::ast::{AstNode, BlockScope, Expr, FuncDef, IdentExpr, Stmt};
 
@@ -58,6 +61,7 @@ pub struct ConstantTableBuilder {}
 /// The context used when building a function
 #[derive(Debug)]
 pub struct FunctionCompileCtx<'a> {
+    symbol_list: Rc<RefCell<SymbolListBuilder>>,
     constants: ConstantTableBuilder,
     scope_map: Scope<'a>,
     errors: Vec<String>,
@@ -66,22 +70,9 @@ pub struct FunctionCompileCtx<'a> {
 }
 
 impl<'a> FunctionCompileCtx<'a> {
-    pub fn in_module_scope(scope: &BlockScope) -> Self {
-        let id = scope.node().text_range().start().into();
-        let scope = Scope::new(id, ScopeType::Module, None);
-
-        Self::with_scope(scope)
-    }
-
-    pub fn in_function_scope(scope: FuncDef) -> Self {
-        let id = scope.node().text_range().start().into();
-        let scope = Scope::new(id, ScopeType::Function, None);
-
-        Self::with_scope(scope)
-    }
-
-    pub fn with_scope(scope: Scope) -> FunctionCompileCtx {
+    pub fn new(scope: Scope, symbol_list: Rc<RefCell<SymbolListBuilder>>) -> FunctionCompileCtx {
         FunctionCompileCtx {
+            symbol_list,
             scope_map: scope,
             constants: Default::default(),
             errors: vec![],
@@ -113,7 +104,7 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Binary(v) => todo!(),
             Expr::Unary(v) => todo!(),
             Expr::FunctionCall(v) => todo!(),
-            Expr::Ident(v) => todo!(),
+            Expr::Ident(v) => self.compile_ident_expr(v),
             Expr::Subscript(v) => todo!(),
             Expr::Dot(v) => todo!(),
             Expr::If(v) => todo!(),
@@ -126,5 +117,8 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_ident_expr(&mut self, id: IdentExpr) {
         let name = id.ident();
+        if let Some((scope, offset, entry)) = self.scope_map.get(name.text()) {
+            todo!()
+        }
     }
 }
