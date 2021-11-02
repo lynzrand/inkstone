@@ -61,6 +61,8 @@ pub enum SynTag {
     TrueKw,
     #[token("false")]
     FalseKw,
+    #[token("nil")]
+    NilKw,
 
     // === Identifiers ====
     #[regex(r"[a-zA-Z_][0-9a-zA-Z_?!]*")]

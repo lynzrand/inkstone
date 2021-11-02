@@ -75,7 +75,58 @@ macro_rules! ast_node {
                 write!(f, "{}", self.node())
             }
         }
-    }
+    };
+    (token: $name:ident, $enum_name:ident, {
+        $( $kind:pat => $kind_name:ident ),*
+    }) => {
+        #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+        pub enum $enum_name {
+            $($kind_name),*
+        }
+
+        #[derive(Debug, Hash, PartialEq, Eq)]
+        pub struct $name {
+            kind: $enum_name,
+            node: SyntaxNode,
+            token: SyntaxToken,
+        }
+
+        impl $name {
+            pub fn cast(node: SyntaxNode) -> Option<Self> {
+                let first_child = node.first_token()?;
+                let kind = match first_child.kind() {
+                    $(
+                        $kind => Some($enum_name::$kind_name),
+                    )*
+                    _ => None
+                }?;
+
+                Some($name {
+                    kind,
+                    node,
+                    token: first_child,
+                })
+            }
+
+            pub fn node(&self) -> &SyntaxNode {
+                &self.node
+            }
+
+            pub fn token(&self) -> &SyntaxToken {
+                &self.token
+            }
+
+            pub fn kind(&self) -> $enum_name {
+                self.kind
+            }
+        }
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{:?}: {}", self.kind(), self.node())
+            }
+        }
+    };
 }
 
 /// Implements various methods to access a node's children.
@@ -288,15 +339,15 @@ ast_node!(WhileLoopExpr, SynTag::WhileLoopExpr);
 ast_node!(ForLoopExpr, SynTag::ForLoopExpr);
 ast_node!(BlockExpr, SynTag::BlockExpr);
 
-ast_node!(LiteralExpr, SynTag::LiteralExpr);
-impl LiteralExpr {
-    impl_child!(tok1, as_int, |o| o == SynTag::Int);
-    impl_child!(tok1, as_float, |o| o == SynTag::Float);
-    impl_child!(tok1, as_string, |o| o == SynTag::StringLiteral);
-    impl_child!(tok1, as_symbol, |o| o == SynTag::Symbol);
-    impl_child!(tok1, as_true, |o| o == SynTag::TrueKw);
-    impl_child!(tok1, as_false, |o| o == SynTag::FalseKw);
-}
+ast_node!(token: LiteralExpr, LiteralKind, {
+    SynTag::Int => Int,
+    SynTag::Float => Float,
+    SynTag::StringLiteral => String,
+    SynTag::Symbol => Symbol,
+    SynTag::TrueKw => True,
+    SynTag::FalseKw => False,
+    SynTag::NilKw => Nil
+});
 
 ast_node!(Binding, SynTag::Binding);
 impl Binding {

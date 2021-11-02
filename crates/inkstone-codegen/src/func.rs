@@ -200,34 +200,34 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_literal_expr(&mut self, lit: LiteralExpr) {
-        if let Some(i) = lit.as_int() {
-            let i = i
-                .text()
-                .parse::<i64>()
-                .expect("TODO: emit an error for this");
-            if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
-                self.curr_bb().emit_p(Inst::PushI32, i as i32);
-            } else {
-                let id = self.constants.insert(Constant::Int64(i));
+        match lit.kind() {
+            inkstone_syn::ast::LiteralKind::Int => {
+                let i = lit
+                    .token()
+                    .text()
+                    .parse::<i64>()
+                    .expect("TODO: emit an error for this");
+                if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                    self.curr_bb().emit_p(Inst::PushI32, i as i32);
+                } else {
+                    let id = self.constants.insert(Constant::Int64(i));
+                    self.curr_bb().emit_p(Inst::PushConst, id);
+                }
+            }
+            inkstone_syn::ast::LiteralKind::Float => {
+                let f = lit
+                    .token()
+                    .text()
+                    .parse::<f64>()
+                    .expect("TODO: emit an error for this");
+                let id = self.constants.insert(Constant::Float64(f.to_bits()));
                 self.curr_bb().emit_p(Inst::PushConst, id);
             }
-        } else if let Some(f) = lit.as_float() {
-            let f = f
-                .text()
-                .parse::<f64>()
-                .expect("TODO: emit an error for this");
-            let id = self.constants.insert(Constant::Float64(f.to_bits()));
-            self.curr_bb().emit_p(Inst::PushConst, id);
-        } else if lit.as_true().is_some() {
-            self.curr_bb().emit(Inst::PushTrue);
-        } else if lit.as_false().is_some() {
-            self.curr_bb().emit(Inst::PushFalse);
-        } else if let Some(s) = lit.as_string() {
-            todo!("match string")
-        } else if let Some(sym) = lit.as_symbol() {
-            todo!("match symbol")
-        } else {
-            panic!("LiteralExpr has unknown variant")
+            inkstone_syn::ast::LiteralKind::True => self.curr_bb().emit(Inst::PushTrue),
+            inkstone_syn::ast::LiteralKind::False => self.curr_bb().emit(Inst::PushFalse),
+            inkstone_syn::ast::LiteralKind::Nil => self.curr_bb().emit(Inst::PushNil),
+            inkstone_syn::ast::LiteralKind::String => todo!(),
+            inkstone_syn::ast::LiteralKind::Symbol => todo!(),
         }
     }
 }
