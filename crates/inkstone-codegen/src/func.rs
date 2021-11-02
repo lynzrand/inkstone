@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::scope::{LexicalScope, Scope, ScopeType};
 use inkstone_bytecode::inst::{write_inst, IParamType, Inst};
-use inkstone_bytecode::reexports::TryFromPrimitive;
 use inkstone_syn::ast::{AstNode, BlockScope, Expr, FuncDef, IdentExpr, Stmt};
 
 #[derive(Debug)]
@@ -37,8 +36,8 @@ impl BasicBlock {
     pub fn validate(&self) -> Option<usize> {
         let mut buf = &self.inst[..];
         while !buf.is_empty() {
-            let inst = Inst::try_from_primitive(buf[0]);
-            if let Ok(inst) = inst {
+            let inst = Inst::from_ordinal(buf[0]);
+            if let Some(inst) = inst {
                 if let Some(param) = inst.param_type() {
                     if !param.validate(&mut buf) {
                         return Some(self.inst.len() - buf.len());

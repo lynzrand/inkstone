@@ -1,8 +1,7 @@
 mod param;
 
 use bytes::BufMut;
-use integer_encoding::VarInt;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use enum_ordinalize::Ordinalize;
 
 pub use self::param::IParamType;
 pub use param::ParamType;
@@ -29,7 +28,7 @@ macro_rules! define_inst {
         ),*
     ) => {
         $(#[$meta])*
-        #[derive(Clone, Debug, PartialEq, Copy, IntoPrimitive, TryFromPrimitive)]
+        #[derive(Clone, Debug, PartialEq, Copy, Ordinalize)]
         #[repr(u8)]
         $ty_vis enum $type {$(
             $(#[$variant_meta])*
