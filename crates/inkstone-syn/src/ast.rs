@@ -67,6 +67,21 @@ macro_rules! ast_node {
 }
 
 /// Implements various methods to access a node's children.
+///
+/// Variants for selecting a single child (returns `None` if not available):
+///
+/// - `1` for the first node satisfying requirements
+/// - `tok1` for the first token satisfying requirements
+/// - `nth` for the `n`th node satisfying requirements
+///
+/// Single child methods also have a `!` variant that asserts the node always exists
+/// Such variants are used if the api _requires_ the corresponding node to always exist if no errors
+/// are emitted.
+///
+/// Variants for selecting many children (returns an iterator):
+///
+/// - `n` for all nodes satisfying requirements
+/// - `tok` for all tokens satisfying requirements
 macro_rules! impl_child {
     (1, $fn_name:ident, $ty:ty) => {
         pub fn $fn_name(&self) -> Option<$ty> {
@@ -81,6 +96,21 @@ macro_rules! impl_child {
                 .find_map(<$ty>::cast)
         }
     };
+    (1!, $fn_name:ident, $ty:ty) => {
+        pub fn $fn_name(&self) -> $ty {
+            self.node().children().find_map(<$ty>::cast)
+                .expect(concat!("No such child that casts to type: ", stringify!($ty)))
+        }
+    };
+    (1!, $fn_name:ident, $tag:pat, $ty:ty) => {
+        pub fn $fn_name(&self) -> $ty {
+            self.node()
+                .children()
+                .filter(|node| matches!(node.kind(), $tag))
+                .find_map(<$ty>::cast)
+                .expect(concat!("No such child using tag: ", stringify!($tag)))
+        }
+    };
     (tok1, $fn_name:ident, $pat:expr) => {
         pub fn $fn_name(&self) -> Option<SyntaxToken> {
             self.node()
@@ -89,9 +119,24 @@ macro_rules! impl_child {
                 .find(|tok| $pat(tok.kind()))
         }
     };
+    (tok1!, $fn_name:ident, $pat:expr) => {
+        pub fn $fn_name(&self) -> SyntaxToken {
+            self.node()
+                .children_with_tokens()
+                .filter_map(|el| el.into_token())
+                .find(|tok| $pat(tok.kind()))
+                .expect(concat!("No such child satisfying: ", stringify!($expr)))
+        }
+    };
     (nth, $fn_name:ident, $ty:ty, $n:expr) => {
         pub fn $fn_name(&self) -> Option<$ty> {
             self.node().children().filter_map(<$ty>::cast).nth($n)
+        }
+    };
+    (nth!, $fn_name:ident, $ty:ty, $n:expr) => {
+        pub fn $fn_name(&self) -> $ty {
+            self.node().children().filter_map(<$ty>::cast).nth($n)
+                .expect(concat!("No ", stringify!($n), "th child satisfying: ", stringify!($expr)))
         }
     };
     (n, $fn_name:ident, $ty:ty $(, skip = $skip:expr)?) => {
@@ -134,7 +179,7 @@ pub trait AstNode: Sized {
 
 ast_node!(Root, SynTag::Root);
 impl Root {
-    impl_child!(1, block_scope, BlockScope);
+    impl_child!(1!, block_scope, BlockScope);
 }
 
 ast_node!(BlockScope, SynTag::BlockScope);
@@ -151,13 +196,13 @@ ast_node!(Stmt, {
 
 ast_node!(ExprStmt, SynTag::ExprStmt);
 impl ExprStmt {
-    impl_child!(1, expr, Expr);
+    impl_child!(1!, expr, Expr);
 }
 
 ast_node!(LetStmt, SynTag::LetStmt);
 impl LetStmt {
-    impl_child!(1, binding, Binding);
-    impl_child!(1, expr, Expr);
+    impl_child!(1!, binding, Binding);
+    impl_child!(1!, expr, Expr);
 }
 
 ast_node!(FuncDef, SynTag::FuncDef);
@@ -168,7 +213,6 @@ ast_node!(Expr, {
     SynTag::UnaryExpr        => (Unary, UnaryExpr),
     SynTag::FunctionCallExpr => (FunctionCall, FunctionCallExpr),
     SynTag::IdentExpr        => (Ident, IdentExpr),
-    SynTag::Namespace        => (Namespace, NamespaceExpr),
     SynTag::SubscriptExpr    => (Subscript, SubscriptExpr),
     SynTag::DotExpr          => (Dot, DotExpr),
     SynTag::IfExpr           => (If, IfExpr),
@@ -180,47 +224,42 @@ ast_node!(Expr, {
 
 ast_node!(BinaryExpr, SynTag::BinaryExpr);
 impl BinaryExpr {
-    impl_child!(tok1, op, |o: SynTag| {
+    impl_child!(tok1!, op, |o: SynTag| {
         crate::parse::pratt_util::infix_binding_power(o).is_some()
     });
-    impl_child!(nth, lhs, Expr, 1);
-    impl_child!(nth, rhs, Expr, 2);
+    impl_child!(nth!, lhs, Expr, 1);
+    impl_child!(nth!, rhs, Expr, 2);
 }
 
 ast_node!(UnaryExpr, SynTag::UnaryExpr);
 impl UnaryExpr {
-    impl_child!(tok1, op, |o: SynTag| {
+    impl_child!(tok1!, op, |o: SynTag| {
         crate::parse::pratt_util::infix_binding_power(o).is_some()
     });
-    impl_child!(nth, lhs, Expr, 1);
+    impl_child!(nth!, lhs, Expr, 1);
 }
 
 ast_node!(FunctionCallExpr, SynTag::FunctionCallExpr);
 impl FunctionCallExpr {
-    impl_child!(1, func, Expr);
+    impl_child!(1!, func, Expr);
     impl_child!(n, params, Expr, skip = 1);
 }
 
 ast_node!(IdentExpr, SynTag::IdentExpr);
 impl IdentExpr {
-    impl_child!(tok1, ident, |o| o == SynTag::Ident);
-}
-
-ast_node!(NamespaceExpr, SynTag::Namespace);
-impl NamespaceExpr {
-    impl_child!(tok, names, |o| o == SynTag::Ident);
+    impl_child!(tok1!, ident, |o| o == SynTag::Ident);
 }
 
 ast_node!(SubscriptExpr, SynTag::SubscriptExpr);
 impl SubscriptExpr {
-    impl_child!(nth, parent, Expr, 1);
-    impl_child!(nth, subscript, Expr, 2);
+    impl_child!(nth!, parent, Expr, 1);
+    impl_child!(nth!, subscript, Expr, 2);
 }
 
 ast_node!(DotExpr, SynTag::DotExpr);
 impl DotExpr {
-    impl_child!(nth, parent, Expr, 1);
-    impl_child!(tok1, subscript, |o| o == SynTag::Ident);
+    impl_child!(nth!, parent, Expr, 1);
+    impl_child!(tok1!, subscript, |o| o == SynTag::Ident);
 }
 
 ast_node!(Chunk, SynTag::BlockScope);

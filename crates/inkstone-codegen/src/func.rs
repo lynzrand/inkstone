@@ -99,7 +99,7 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_stmt(&mut self, stmt: Stmt) {
         match stmt {
             Stmt::Expr(v) => {
-                self.compile_expr(v.expr().unwrap());
+                self.compile_expr(v.expr());
                 // TODO: pop
             }
             Stmt::Def(v) => todo!(),
@@ -114,7 +114,6 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Unary(v) => todo!(),
             Expr::FunctionCall(v) => todo!(),
             Expr::Ident(v) => todo!(),
-            Expr::Namespace(v) => todo!(),
             Expr::Subscript(v) => todo!(),
             Expr::Dot(v) => todo!(),
             Expr::If(v) => todo!(),

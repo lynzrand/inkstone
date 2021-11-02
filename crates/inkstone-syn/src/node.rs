@@ -158,7 +158,6 @@ pub enum SynTag {
 
     // ================ AST Nodes ================
     Name,
-    Namespace,
 
     // Literals
     KeyValuePair,
