@@ -25,6 +25,9 @@ pub struct Scope<'a> {
     ty: ScopeType,
     super_scope: Option<&'a Scope<'a>>,
     locals: Vec<ScopeEntry>,
+    /// List of lexical scopes tied to this scope. The top-level lexical scope will be used
+    /// to determine the relation between exported item names and their offsets after the
+    /// compilation completes.
     scope_stack: Vec1<LexicalScope>,
 }
 
@@ -49,8 +52,14 @@ impl<'a> Scope<'a> {
             .expect("This ScopeMap pops its last scope. what happened?");
     }
 
-    pub fn insert(&mut self, name: SmolStr, entry: ScopeEntry) -> usize {
+    pub fn insert(&mut self, name: SmolStr, entry: ScopeEntry) -> u32 {
         let id = self.locals.len();
+        assert!(
+            id <= u32::MAX as usize,
+            "Cannot hold more than 2^32 local variables"
+        );
+
+        let id = id as u32;
         self.locals.push(entry);
 
         let last = self.scope_stack.last_mut();
@@ -63,23 +72,23 @@ impl<'a> Scope<'a> {
     /// Get the definition of a name, in local scope or super scope.
     ///
     /// Returns `Some((scope_id, offset, entry))` if the name is defined, `None` otherwise.
-    pub fn get(&self, name: &str) -> Option<(u32, usize, &ScopeEntry)> {
+    pub fn get(&self, name: &str) -> Option<(u32, u32, &ScopeEntry)> {
         self.get_local(name)
             .map(|(offset, entry)| (self.id, offset, entry))
             .or_else(|| self.get_super(name))
     }
 
     /// Get the definition of a name in local scope.
-    pub fn get_local(&self, name: &str) -> Option<(usize, &ScopeEntry)> {
+    pub fn get_local(&self, name: &str) -> Option<(u32, &ScopeEntry)> {
         for scope in self.scope_stack.iter().rev() {
             if let Some(idx) = scope.mapping.get(name) {
-                return self.locals.get(*idx).map(|entry| (*idx, entry));
+                return self.locals.get(*idx as usize).map(|entry| (*idx, entry));
             }
         }
         None
     }
 
-    fn get_super(&self, name: &str) -> Option<(u32, usize, &ScopeEntry)> {
+    fn get_super(&self, name: &str) -> Option<(u32, u32, &ScopeEntry)> {
         self.super_scope.and_then(|scope| scope.get(name))
     }
 }
@@ -88,8 +97,18 @@ impl<'a> Scope<'a> {
 /// closest [`ScopeMap`] above current scope.
 #[derive(Debug, Default)]
 pub struct LexicalScope {
-    mapping: HashMap<SmolStr, usize, fnv::FnvBuildHasher>,
+    mapping: HashMap<SmolStr, u32, fnv::FnvBuildHasher>,
 }
 
 #[derive(Debug)]
-pub struct ScopeEntry {}
+pub enum ScopeEntryKind {
+    Variable,
+    Function,
+    Module,
+}
+
+#[derive(Debug)]
+pub struct ScopeEntry {
+    pub kind: ScopeEntryKind,
+    pub is_public: bool,
+}

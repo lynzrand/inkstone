@@ -384,8 +384,9 @@ impl<'src> Parser<'src> {
 
     fn parse_optional_visibility(&mut self) {
         // pub?
-        self.start_node(SynTag::Visibility);
+        let checkpoint = self.b.checkpoint();
         if self.peek() == SynTag::PubKw {
+            self.start_node_at(checkpoint, SynTag::Visibility);
             self.start_node(SynTag::Pub);
             self.eat();
             self.finish_node();

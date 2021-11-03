@@ -254,21 +254,54 @@ ast_node!(Stmt, {
     SynTag::ExprStmt => (Expr, ExprStmt),
     SynTag::FuncDef => (Def, FuncDef),
     SynTag::LetStmt => (Let, LetStmt),
-    SynTag::UseStmt => (Use, UseStmt)
+    SynTag::UseStmt => (Use, UseStmt),
+    SynTag::ModuleDef => (Mod, ModuleDef)
 });
+
+ast_node!(ModuleDef, SynTag::ModuleDef);
+impl ModuleDef {
+    impl_child!(1, vis, Visibility);
+    impl_child!(1!, name, Name);
+    impl_child!(1!, block_scope, BlockScope);
+}
 
 ast_node!(ExprStmt, SynTag::ExprStmt);
 impl ExprStmt {
     impl_child!(1!, expr, Expr);
 }
 
+ast_node!(Visibility, SynTag::Visibility);
+impl Visibility {
+    impl_child!(1, public, PublicVisibility);
+}
+
+ast_node!(PublicVisibility, SynTag::Pub);
+
 ast_node!(LetStmt, SynTag::LetStmt);
 impl LetStmt {
+    impl_child!(1, vis, Visibility);
     impl_child!(1!, binding, Binding);
     impl_child!(1!, expr, Expr);
 }
 
 ast_node!(FuncDef, SynTag::FuncDef);
+impl FuncDef {
+    impl_child!(1, vis, Visibility);
+    impl_child!(1!, name, Name);
+    impl_child!(1!, param_list, FuncParamList);
+    impl_child!(1!, body, Expr);
+}
+
+ast_node!(FuncParamList, SynTag::FuncParamList);
+impl FuncParamList {
+    impl_child!(n, params, FuncParam);
+}
+
+ast_node!(FuncParam, SynTag::FuncParam);
+impl FuncParam {
+    impl_child!(tok1!, name, |o| o == SynTag::Ident);
+}
+
 ast_node!(UseStmt, SynTag::UseStmt);
 
 ast_node!(Expr, {
@@ -385,3 +418,6 @@ impl Binding {
 }
 
 ast_node!(Name, SynTag::Name);
+impl Name {
+    impl_child!(tok1!, name, |o| o == SynTag::Ident);
+}

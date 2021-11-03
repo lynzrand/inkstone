@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
-use crate::scope::{LexicalScope, Scope, ScopeEntry, ScopeType};
+use crate::scope::{self, LexicalScope, Scope, ScopeEntry, ScopeType};
 use crate::SymbolListBuilder;
 use fnv::FnvHashMap;
 use inkstone_bytecode::inst::{write_inst, IParamType, Inst};
@@ -125,12 +125,6 @@ impl<'a> FunctionCompileCtx<'a> {
         }
     }
 
-    pub fn compile_block_scope(&mut self, scope: BlockScope) {
-        for stmt in scope.stmt() {
-            self.compile_stmt(stmt);
-        }
-    }
-
     fn curr_bb(&mut self) -> &mut BasicBlock {
         self.basic_blocks
             .get_mut(self.curr_bb)
@@ -143,12 +137,69 @@ impl<'a> FunctionCompileCtx<'a> {
 }
 
 impl<'a> FunctionCompileCtx<'a> {
+    pub fn compile_module_scope(&mut self, scope: BlockScope) {
+        // Compiling module scope needs to scan for public definitions
+        // before compiling anything else
+        for stmt in scope.stmt() {
+            match stmt {
+                Stmt::Expr(_) => {} // no-op: expressions aren't public
+                Stmt::Def(v) => self.scope_scan_def(v),
+                Stmt::Let(v) => self.scope_scan_let(v),
+                Stmt::Use(_v) => {
+                    // `use foo` is not yet getting parsed
+                }
+                Stmt::Mod(v) => {}
+            }
+        }
+
+        self.compile_block_scope(scope)
+    }
+
+    fn scope_scan_let(&mut self, v: LetStmt) {
+        let is_public = v.vis().and_then(|v| v.public());
+        if is_public.is_some() {
+            let name = v.binding().name();
+            let name = name.as_ref().map(|t| t.text());
+            if let Some(t) = name {
+                self.scope_map.insert(
+                    t.into(),
+                    ScopeEntry {
+                        kind: scope::ScopeEntryKind::Variable,
+                        is_public: true,
+                    },
+                );
+            }
+        }
+    }
+
+    fn scope_scan_def(&mut self, def: FuncDef) {
+        let is_public = def.vis().and_then(|v| v.public());
+        if is_public.is_some() {
+            let name = def.name().name();
+            let name = name.text();
+            self.scope_map.insert(
+                name.into(),
+                ScopeEntry {
+                    kind: scope::ScopeEntryKind::Function,
+                    is_public: true,
+                },
+            );
+        }
+    }
+
+    pub fn compile_block_scope(&mut self, scope: BlockScope) {
+        for stmt in scope.stmt() {
+            self.compile_stmt(stmt);
+        }
+    }
+
     fn compile_stmt(&mut self, stmt: Stmt) {
         match stmt {
             Stmt::Expr(v) => self.compile_expr_stmt(v),
             Stmt::Def(v) => todo!(),
             Stmt::Let(v) => self.compile_let_stmt(v),
             Stmt::Use(v) => todo!(),
+            Stmt::Mod(v) => todo!(),
         }
     }
 
@@ -164,7 +215,30 @@ impl<'a> FunctionCompileCtx<'a> {
             // this definition binds to a name
             let name = name.text();
 
-            let local_slot = self.scope_map.insert(name.into(), ScopeEntry {});
+            let vis = let_stmt.vis();
+            let pub_vis = vis.and_then(|v| v.public());
+
+            let local_slot = if pub_vis.is_none() || self.scope_map.get_local(name).is_none() {
+                // Note:
+                //
+                // If the variable is not public, subsequent values can mask
+                // previous values.
+                //
+                // If it's public and at the top-level scope, we would have
+                // already inserted it at the initial scope scan.
+
+                self.scope_map.insert(
+                    name.into(),
+                    ScopeEntry {
+                        kind: scope::ScopeEntryKind::Variable,
+                        is_public: pub_vis.is_some(),
+                    },
+                )
+            } else {
+                self.emit_error(format!("Redefinition of public variable `{}`", name));
+                return;
+            };
+
             let val = let_stmt.expr();
 
             self.compile_expr(val);
