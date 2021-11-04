@@ -275,7 +275,7 @@ impl IParamType for () {
 
     const MAX_RESERVE_LEN: usize = 0;
 
-    fn validate(r: impl Buf) -> bool {
+    fn validate(_: impl Buf) -> bool {
         true
     }
 

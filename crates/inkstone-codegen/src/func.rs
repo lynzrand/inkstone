@@ -13,14 +13,24 @@ use inkstone_syn::ast::{
 #[derive(Debug)]
 struct BasicBlock {
     inst: Vec<u8>,
-    jmp: Inst,
+    jmp: JumpInst,
+}
+
+/// A jump instruction that is
+#[derive(Debug)]
+enum JumpInst {
+    Unknown,
+    Unconditional(usize),
+    Conditional(usize, usize),
+    Return,
+    ReturnNil,
 }
 
 impl BasicBlock {
     pub fn new() -> BasicBlock {
         BasicBlock {
             inst: vec![],
-            jmp: Inst::Nop,
+            jmp: JumpInst::Unknown,
         }
     }
 
@@ -36,7 +46,7 @@ impl BasicBlock {
         write_inst(&mut self.inst, inst, ())
     }
 
-    pub fn set_jmp(&mut self, inst: Inst) {
+    pub fn set_jmp(&mut self, inst: JumpInst) {
         self.jmp = inst;
     }
 
@@ -130,6 +140,8 @@ impl<'a> FunctionCompileCtx<'a> {
             .get_mut(self.curr_bb)
             .expect("`curr_bb` refers to an non-existant basic block. What?")
     }
+
+    fn set_curr_bb(&mut self, id: usize) {}
 
     fn emit_error(&mut self, e: String) {
         self.errors.push(e);
