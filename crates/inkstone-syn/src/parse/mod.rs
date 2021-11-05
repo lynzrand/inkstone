@@ -1060,14 +1060,12 @@ impl<'src> Parser<'src> {
         );
         self.eat_whitespace_or_line_feeds();
 
-        self.start_node(FuncBody);
         recover_with!(
             self,
             self.parse_expr(false),
             recovery = |t| t.is_expr_parsing_sync_token(),
-            close_nodes = 2
+            close_nodes = 1
         );
-        self.finish_node();
         self.finish_node();
     }
 

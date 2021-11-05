@@ -8,8 +8,9 @@ use crate::SymbolListBuilder;
 use fnv::FnvHashMap;
 use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst};
 use inkstone_syn::ast::{
-    AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockScope, DotExpr, Expr, ExprStmt, FuncDef,
-    IdentExpr, LetStmt, LiteralExpr, Stmt, SubscriptExpr, UnaryExpr,
+    AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope, DotExpr, Expr, ExprStmt,
+    ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
+    Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
 };
 
 /// A block of code with no branch inside
@@ -314,15 +315,16 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Binary(v) => self.compile_binary_expr(v),
             Expr::Assign(v) => self.compile_assign_expr(v),
             Expr::Unary(v) => self.compile_unary_expr(v),
-            Expr::FunctionCall(v) => todo!(),
+            Expr::FunctionCall(v) => self.compile_function_call_expr(v),
             Expr::Ident(v) => self.compile_ident_expr(v),
-            Expr::Subscript(v) => todo!(),
-            Expr::Dot(v) => todo!(),
-            Expr::If(v) => todo!(),
-            Expr::While(v) => todo!(),
-            Expr::For(v) => todo!(),
-            Expr::Block(v) => todo!(),
+            Expr::Subscript(v) => self.compile_subscript_expr(v),
+            Expr::Dot(v) => self.compile_dot_expr(v),
+            Expr::If(v) => self.compile_if_expr(v),
+            Expr::While(v) => self.compile_while_loop_expr(v),
+            Expr::For(v) => self.compile_for_loop_expr(v),
+            Expr::Block(v) => self.compile_block_expr(v),
             Expr::Literal(v) => self.compile_literal_expr(v),
+            Expr::Lambda(v) => self.compile_lambda_expr(v),
         }
     }
 
@@ -509,6 +511,10 @@ impl<'a> FunctionCompileCtx<'a> {
         }
     }
 
+    fn compile_function_call_expr(&mut self, v: FunctionCallExpr) {
+        todo!()
+    }
+
     /// Compile an identifier expression (RValue).
     fn compile_ident_expr(&mut self, id: IdentExpr) {
         let name = id.ident();
@@ -534,6 +540,30 @@ impl<'a> FunctionCompileCtx<'a> {
                 },
             );
         }
+    }
+
+    fn compile_subscript_expr(&mut self, v: SubscriptExpr) {
+        todo!()
+    }
+
+    fn compile_dot_expr(&mut self, v: DotExpr) {
+        todo!()
+    }
+
+    fn compile_if_expr(&mut self, v: IfExpr) {
+        todo!()
+    }
+
+    fn compile_while_loop_expr(&mut self, v: WhileLoopExpr) {
+        todo!()
+    }
+
+    fn compile_for_loop_expr(&mut self, v: ForLoopExpr) {
+        todo!()
+    }
+
+    fn compile_block_expr(&mut self, v: BlockExpr) {
+        self.compile_block_scope(v.scope());
     }
 
     fn compile_literal_expr(&mut self, lit: LiteralExpr) {
@@ -566,6 +596,10 @@ impl<'a> FunctionCompileCtx<'a> {
             inkstone_syn::ast::LiteralKind::String => todo!(),
             inkstone_syn::ast::LiteralKind::Symbol => todo!(),
         }
+    }
+
+    fn compile_lambda_expr(&mut self, v: LambdaExpr) {
+        todo!()
     }
 }
 

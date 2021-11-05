@@ -316,7 +316,8 @@ ast_node!(Expr, {
     SynTag::WhileLoopExpr    => (While, WhileLoopExpr),
     SynTag::ForLoopExpr      => (For, ForLoopExpr),
     SynTag::BlockExpr        => (Block, BlockExpr),
-    SynTag::LiteralExpr      => (Literal, LiteralExpr)
+    SynTag::LiteralExpr      => (Literal, LiteralExpr),
+    SynTag::LambdaExpr       => (Lambda, LambdaExpr)
 });
 
 ast_node!(BinaryExpr, SynTag::BinaryExpr);
@@ -393,12 +394,52 @@ impl DotExpr {
     impl_child!(tok1!, subscript, |o| o == SynTag::Ident);
 }
 
+ast_node!(LambdaExpr, SynTag::LambdaExpr);
+impl LambdaExpr {
+    impl_child!(1!, param_list, FuncParamList);
+    impl_child!(1!, body, Expr);
+}
+
 ast_node!(Chunk, SynTag::BlockScope);
 
 ast_node!(IfExpr, SynTag::IfExpr);
+impl IfExpr {
+    impl_child!(n, branches, IfBranch);
+}
+
+ast_node!(IfBranch, SynTag::IfBranch);
+impl IfBranch {
+    impl_child!(1, condition, Condition);
+    impl_child!(1!, body, Expr);
+}
+
+ast_node!(Condition, SynTag::Condition);
+impl Condition {
+    impl_child!(1!, expr, Expr);
+}
+
 ast_node!(WhileLoopExpr, SynTag::WhileLoopExpr);
+impl WhileLoopExpr {
+    impl_child!(1!, condition, Condition);
+    impl_child!(1!, body, BlockScope);
+}
+
 ast_node!(ForLoopExpr, SynTag::ForLoopExpr);
+impl ForLoopExpr {
+    impl_child!(1!, condition, ForCondition);
+    impl_child!(1!, body, BlockScope);
+}
+
+ast_node!(ForCondition, SynTag::Condition);
+impl ForCondition {
+    impl_child!(1!, binding, Binding);
+    impl_child!(1!, expr, Expr);
+}
+
 ast_node!(BlockExpr, SynTag::BlockExpr);
+impl BlockExpr {
+    impl_child!(1!, scope, BlockScope);
+}
 
 ast_node!(token: LiteralExpr, LiteralKind, {
     SynTag::Int => Int,
