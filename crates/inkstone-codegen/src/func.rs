@@ -8,8 +8,8 @@ use crate::SymbolListBuilder;
 use fnv::FnvHashMap;
 use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst};
 use inkstone_syn::ast::{
-    AstNode, BinaryExpr, BinaryOpKind, BlockScope, Expr, ExprStmt, FuncDef, IdentExpr, LetStmt,
-    LiteralExpr, Stmt,
+    AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockScope, Expr, ExprStmt, FuncDef, IdentExpr,
+    LetStmt, LiteralExpr, Stmt,
 };
 
 /// A block of code with no branch inside
@@ -48,7 +48,7 @@ enum TopoSortAffinity {
     TrueBranch,
     /// Visit False branch first in topological sorting
     FalseBranch,
-    /// Ignore ths block's choice when doing topological sort
+    /// Ignore ths block's role as a predecessor when doing topological sort
     Neither,
 }
 
@@ -171,7 +171,16 @@ impl<'a> FunctionCompileCtx<'a> {
             .expect("`curr_bb` refers to an non-existant basic block. What?")
     }
 
-    fn set_curr_bb(&mut self, id: usize) {}
+    fn set_curr_bb(&mut self, id: usize) {
+        assert!(id <= self.basic_blocks.len());
+        self.curr_bb = id;
+    }
+
+    fn new_bb(&mut self) -> usize {
+        let id = self.basic_blocks.len();
+        self.basic_blocks.push(BasicBlock::default());
+        id
+    }
 
     fn emit_error(&mut self, e: CompileError) {
         self.errors.push(e);
@@ -179,12 +188,12 @@ impl<'a> FunctionCompileCtx<'a> {
 }
 
 #[derive(Debug)]
-struct ShortCircuitCtx {
-    next_bb_if_true: usize,
-    next_bb_if_false: usize,
+enum LValue {
+    LocalVariable,
+    SuperVariable,
+    Subscript,
+    DynamicSubscript,
 }
-
-type ShortCircuitParam<'a> = Option<&'a ShortCircuitCtx>;
 
 impl<'a> FunctionCompileCtx<'a> {
     pub fn compile_module_scope(&mut self, scope: BlockScope) {
@@ -254,7 +263,7 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_expr_stmt(&mut self, v: ExprStmt) {
-        self.compile_expr(v.expr(), None);
+        self.compile_expr(v.expr());
         // pop the remaining value and call it a day
         self.curr_bb().emit(Inst::Pop);
     }
@@ -291,7 +300,7 @@ impl<'a> FunctionCompileCtx<'a> {
 
             let val = let_stmt.expr();
 
-            self.compile_expr(val, None);
+            self.compile_expr(val);
 
             self.curr_bb().emit_p(Inst::StoreLocal, local_slot as u32);
         } else {
@@ -299,9 +308,9 @@ impl<'a> FunctionCompileCtx<'a> {
         }
     }
 
-    fn compile_expr(&mut self, expr: Expr, short_circuiting: ShortCircuitParam) {
+    fn compile_expr(&mut self, expr: Expr) {
         match expr {
-            Expr::Binary(v) => self.compile_binary_expr(v, short_circuiting),
+            Expr::Binary(v) => self.compile_binary_expr(v),
             Expr::Assign(v) => todo!(),
             Expr::Unary(v) => todo!(),
             Expr::FunctionCall(v) => todo!(),
@@ -316,14 +325,14 @@ impl<'a> FunctionCompileCtx<'a> {
         }
     }
 
-    fn compile_binary_expr(&mut self, v: BinaryExpr, short_circuiting: ShortCircuitParam) {
+    fn compile_binary_expr(&mut self, v: BinaryExpr) {
         let op_kind = v.op().kind();
         if matches!(op_kind, BinaryOpKind::OrKw | BinaryOpKind::AndKw) {
-            return self.compile_shortcircuit_binary_expr(v, short_circuiting);
+            return self.compile_shortcircuit_binary_expr(v);
         }
 
-        self.compile_expr(v.lhs(), None);
-        self.compile_expr(v.rhs(), None);
+        self.compile_expr(v.lhs());
+        self.compile_expr(v.rhs());
 
         // all these operators emit a single instruction with no parameter
         let emitted = match op_kind {
@@ -355,11 +364,7 @@ impl<'a> FunctionCompileCtx<'a> {
     /// If the `short_circuiting` param is `Some((a, b))`, then `a` is the basic
     /// block the code should jump to if this value evaluates to `true`, and `b`
     /// is that if it evaluates to `false`.
-    fn compile_shortcircuit_binary_expr(
-        &mut self,
-        v: BinaryExpr,
-        short_circuiting: ShortCircuitParam,
-    ) {
+    fn compile_shortcircuit_binary_expr(&mut self, v: BinaryExpr) {
         /*
             The way short circuiting is implemented is very simple:
 
@@ -383,6 +388,55 @@ impl<'a> FunctionCompileCtx<'a> {
             end:
                 (end)
         */
+        let i_bb = self.new_bb();
+        let next_bb = self.new_bb();
+
+        if v.op().kind() == BinaryOpKind::AndKw {
+            self.compile_expr(v.lhs());
+            self.curr_bb().emit(Inst::Dup);
+            self.curr_bb().set_jmp(JumpInst::Conditional(
+                i_bb,
+                next_bb,
+                TopoSortAffinity::TrueBranch,
+            ));
+
+            self.set_curr_bb(i_bb);
+            self.curr_bb().emit(Inst::Pop);
+            self.compile_expr(v.rhs());
+            self.curr_bb().set_jmp(JumpInst::Unconditional(next_bb));
+        } else if v.op().kind() == BinaryOpKind::OrKw {
+            self.compile_expr(v.lhs());
+            self.curr_bb().emit(Inst::Dup);
+            self.curr_bb().set_jmp(JumpInst::Conditional(
+                next_bb,
+                i_bb,
+                TopoSortAffinity::FalseBranch,
+            ));
+
+            self.set_curr_bb(i_bb);
+            self.curr_bb().emit(Inst::Pop);
+            self.compile_expr(v.rhs());
+            self.curr_bb().set_jmp(JumpInst::Unconditional(next_bb));
+        } else {
+            unreachable!("Should not pass non-short-circuiting operator here");
+        }
+        self.set_curr_bb(next_bb);
+    }
+
+    fn compile_assign_expr(&mut self, v: AssignExpr) {
+        let l_val = self.compile_left_value(v.tgt());
+        self.compile_expr(v.val());
+
+        match l_val {
+            LValue::LocalVariable => todo!(),
+            LValue::SuperVariable => todo!(),
+            LValue::Subscript => todo!(),
+            LValue::DynamicSubscript => todo!(),
+        }
+    }
+
+    fn compile_left_value(&mut self, v: Expr) -> LValue {
+        todo!()
     }
 
     /// Compile an identifier expression (RValue).
