@@ -1,3 +1,4 @@
+pub mod error;
 pub mod func;
 mod scope;
 
@@ -10,7 +11,7 @@ use inkstone_syn::ast::{AstNode, BlockScope};
 use smol_str::SmolStr;
 
 pub struct ChunkContext {
-    pub module: Vec<String>,
+    pub current_module: Vec<SmolStr>,
 }
 
 /// Compile the given chunk

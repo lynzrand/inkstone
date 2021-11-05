@@ -42,6 +42,10 @@ impl<'a> Scope<'a> {
         }
     }
 
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
     pub fn new_scope(&mut self) {
         self.scope_stack.push(LexicalScope::default());
     }

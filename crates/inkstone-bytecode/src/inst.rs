@@ -123,6 +123,7 @@ define_inst! {
     ///
     Mul                          >> 2     << 1,
     Div                          >> 2     << 1,
+    Rem                          >> 2     << 1,
     Pow                          >> 2     << 1,
 
     BitAnd                       >> 2     << 1,
@@ -134,6 +135,13 @@ define_inst! {
 
     And                          >> 2     << 1,
     Or                           >> 2     << 1,
+
+    Lt                           >> 2     << 1,
+    Gt                           >> 2     << 1,
+    Le                           >> 2     << 1,
+    Ge                           >> 2     << 1,
+    Eq                           >> 2     << 1,
+    Ne                           >> 2     << 1,
 
     // compound types
     /// Create a new tuple. Pops additional `len` items to populate the tuple.

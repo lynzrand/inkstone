@@ -2,36 +2,65 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
+use crate::error::CompileError;
 use crate::scope::{self, LexicalScope, Scope, ScopeEntry, ScopeType};
 use crate::SymbolListBuilder;
 use fnv::FnvHashMap;
-use inkstone_bytecode::inst::{write_inst, IParamType, Inst};
+use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst};
 use inkstone_syn::ast::{
-    AstNode, BlockScope, Expr, ExprStmt, FuncDef, IdentExpr, LetStmt, LiteralExpr, Stmt,
+    AstNode, BinaryExpr, BinaryOpKind, BlockScope, Expr, ExprStmt, FuncDef, IdentExpr, LetStmt,
+    LiteralExpr, Stmt,
 };
 
-#[derive(Debug)]
+/// A block of code with no branch inside
+#[derive(Debug, Default)]
 struct BasicBlock {
     inst: Vec<u8>,
     jmp: JumpInst,
+
+    /// If true, this block will be ignored in topological sorting and deferred
+    /// until all other non-deferred blocks have been already emitted.
+    deferred: bool,
 }
 
-/// A jump instruction that is
+/// A jump instruction that has not yet been transformed into bytecode
 #[derive(Debug)]
 enum JumpInst {
     Unknown,
     Unconditional(usize),
-    Conditional(usize, usize),
+    Conditional(usize, usize, TopoSortAffinity),
     Return,
     ReturnNil,
 }
 
+impl Default for JumpInst {
+    fn default() -> Self {
+        JumpInst::Unknown
+    }
+}
+
+/// Decide which branch gets emitted first when topological sorting
+#[derive(Debug, PartialEq, Eq)]
+enum TopoSortAffinity {
+    /// Don't care which branch get emitted first
+    IDontCare,
+    /// Visit True branch first in topological sorting
+    TrueBranch,
+    /// Visit False branch first in topological sorting
+    FalseBranch,
+    /// Ignore ths block's choice when doing topological sort
+    Neither,
+}
+
+impl Default for TopoSortAffinity {
+    fn default() -> Self {
+        TopoSortAffinity::IDontCare
+    }
+}
+
 impl BasicBlock {
     pub fn new() -> BasicBlock {
-        BasicBlock {
-            inst: vec![],
-            jmp: JumpInst::Unknown,
-        }
+        Default::default()
     }
 
     pub fn emit_p(&mut self, inst: Inst, param: impl IParamType) {
@@ -116,10 +145,11 @@ pub struct FunctionCompileCtx<'a> {
     symbol_list: Rc<RefCell<SymbolListBuilder>>,
     constants: ConstantTableBuilder,
     scope_map: Scope<'a>,
-    errors: Vec<String>,
+    errors: Vec<CompileError>,
 
     basic_blocks: Vec<BasicBlock>,
     curr_bb: usize,
+    // feature-specific structures
 }
 
 impl<'a> FunctionCompileCtx<'a> {
@@ -143,10 +173,18 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn set_curr_bb(&mut self, id: usize) {}
 
-    fn emit_error(&mut self, e: String) {
+    fn emit_error(&mut self, e: CompileError) {
         self.errors.push(e);
     }
 }
+
+#[derive(Debug)]
+struct ShortCircuitCtx {
+    next_bb_if_true: usize,
+    next_bb_if_false: usize,
+}
+
+type ShortCircuitParam<'a> = Option<&'a ShortCircuitCtx>;
 
 impl<'a> FunctionCompileCtx<'a> {
     pub fn compile_module_scope(&mut self, scope: BlockScope) {
@@ -216,7 +254,7 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_expr_stmt(&mut self, v: ExprStmt) {
-        self.compile_expr(v.expr());
+        self.compile_expr(v.expr(), None);
         // pop the remaining value and call it a day
         self.curr_bb().emit(Inst::Pop);
     }
@@ -247,23 +285,23 @@ impl<'a> FunctionCompileCtx<'a> {
                     },
                 )
             } else {
-                self.emit_error(format!("Redefinition of public variable `{}`", name));
+                self.emit_error(CompileError::new("pub_let_redefinition", binding.span()));
                 return;
             };
 
             let val = let_stmt.expr();
 
-            self.compile_expr(val);
+            self.compile_expr(val, None);
 
             self.curr_bb().emit_p(Inst::StoreLocal, local_slot as u32);
         } else {
-            self.emit_error(format!("No such binding as {}", binding));
+            self.emit_error(CompileError::new("bad_binding", binding.span()));
         }
     }
 
-    fn compile_expr(&mut self, expr: Expr) {
+    fn compile_expr(&mut self, expr: Expr, short_circuiting: ShortCircuitParam) {
         match expr {
-            Expr::Binary(v) => todo!(),
+            Expr::Binary(v) => self.compile_binary_expr(v, short_circuiting),
             Expr::Assign(v) => todo!(),
             Expr::Unary(v) => todo!(),
             Expr::FunctionCall(v) => todo!(),
@@ -278,10 +316,99 @@ impl<'a> FunctionCompileCtx<'a> {
         }
     }
 
+    fn compile_binary_expr(&mut self, v: BinaryExpr, short_circuiting: ShortCircuitParam) {
+        let op_kind = v.op().kind();
+        if matches!(op_kind, BinaryOpKind::OrKw | BinaryOpKind::AndKw) {
+            return self.compile_shortcircuit_binary_expr(v, short_circuiting);
+        }
+
+        self.compile_expr(v.lhs(), None);
+        self.compile_expr(v.rhs(), None);
+
+        // all these operators emit a single instruction with no parameter
+        let emitted = match op_kind {
+            BinaryOpKind::Lt => Inst::Lt,
+            BinaryOpKind::Gt => Inst::Gt,
+            BinaryOpKind::Le => Inst::Le,
+            BinaryOpKind::Ge => Inst::Ge,
+            BinaryOpKind::Eq => Inst::Eq,
+            BinaryOpKind::Ne => Inst::Ne,
+            BinaryOpKind::Add => Inst::Add,
+            BinaryOpKind::Sub => Inst::Sub,
+            BinaryOpKind::BitAnd => Inst::BitAnd,
+            BinaryOpKind::BitOr => Inst::BitOr,
+            BinaryOpKind::BitXor => Inst::BitXor,
+            BinaryOpKind::Mul => Inst::Mul,
+            BinaryOpKind::Div => Inst::Div,
+            BinaryOpKind::Rem => Inst::Rem,
+            BinaryOpKind::Pow => Inst::Pow,
+
+            // these two are specially treated
+            BinaryOpKind::OrKw | BinaryOpKind::AndKw => unreachable!(),
+        };
+
+        self.curr_bb().emit(emitted);
+    }
+
+    /// Compile a short-circuiting binary expression, like `a and b` and `a or b`.
+    ///
+    /// If the `short_circuiting` param is `Some((a, b))`, then `a` is the basic
+    /// block the code should jump to if this value evaluates to `true`, and `b`
+    /// is that if it evaluates to `false`.
+    fn compile_shortcircuit_binary_expr(
+        &mut self,
+        v: BinaryExpr,
+        short_circuiting: ShortCircuitParam,
+    ) {
+        /*
+            The way short circuiting is implemented is very simple:
+
+            For `and`s:
+                evaluate lhs
+                dup
+                jump if_false -> end, if_true -> if_true
+            if_true:
+                pop
+                evaluate rhs
+            end:
+                (end)
+
+            for `or`s:
+                evaluate lhs
+                dup
+                jump if_false->if_false, if_true -> end
+            if_false:
+                pop
+                evaluate rhs
+            end:
+                (end)
+        */
+    }
+
+    /// Compile an identifier expression (RValue).
     fn compile_ident_expr(&mut self, id: IdentExpr) {
         let name = id.ident();
-        if let Some((scope, offset, entry)) = self.scope_map.get(name.text()) {
-            todo!()
+        if let Some((scope, offset, _entry)) = self.scope_map.get(name.text()) {
+            if scope == self.scope_map.id() {
+                // local variable
+                self.curr_bb().emit_p(Inst::LoadLocal, offset);
+            } else {
+                // captured variable
+                self.emit_error(
+                    CompileError::new("unsupported_capture", id.span())
+                        .with_message("Capturing external variables is not yet supported"),
+                )
+            }
+        } else {
+            self.emit_error(CompileError::new("unknown_ident", id.span()));
+            // error recovery: insert this variable. It is now undefined.
+            self.scope_map.insert(
+                name.text().into(),
+                ScopeEntry {
+                    kind: scope::ScopeEntryKind::Variable,
+                    is_public: false,
+                },
+            );
         }
     }
 
@@ -316,4 +443,8 @@ impl<'a> FunctionCompileCtx<'a> {
             inkstone_syn::ast::LiteralKind::Symbol => todo!(),
         }
     }
+}
+
+impl FunctionCompileCtx<'_> {
+    pub fn finalize(self) {}
 }
