@@ -327,8 +327,8 @@ impl BinaryExpr {
 }
 
 ast_node!(token: BinaryOp, BinaryOpKind, {
-    SynTag::OrKw => OrKw,
-    SynTag::AndKw => AndKw,
+    SynTag::OrKw => ShortCircuitOr,
+    SynTag::AndKw => ShortCircuitAnd,
 
     SynTag::Lt => Lt,
     SynTag::Gt => Gt,
@@ -359,9 +359,7 @@ impl AssignExpr {
 
 ast_node!(UnaryExpr, SynTag::UnaryExpr);
 impl UnaryExpr {
-    impl_child!(tok1!, op, |o: SynTag| {
-        crate::parse::pratt_util::infix_binding_power(o).is_some()
-    });
+    impl_child!(1!,op,UnaryOp);
     impl_child!(1!, lhs, Expr);
 }
 

@@ -8,8 +8,8 @@ use crate::SymbolListBuilder;
 use fnv::FnvHashMap;
 use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst};
 use inkstone_syn::ast::{
-    AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockScope, Expr, ExprStmt, FuncDef, IdentExpr,
-    LetStmt, LiteralExpr, Stmt,
+    AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockScope, DotExpr, Expr, ExprStmt, FuncDef,
+    IdentExpr, LetStmt, LiteralExpr, Stmt, SubscriptExpr, UnaryExpr,
 };
 
 /// A block of code with no branch inside
@@ -21,6 +21,9 @@ struct BasicBlock {
     /// If true, this block will be ignored in topological sorting and deferred
     /// until all other non-deferred blocks have been already emitted.
     deferred: bool,
+
+    /// If true, this block will be ignored as the predecessor of its successors
+    ignored: bool,
 }
 
 /// A jump instruction that has not yet been transformed into bytecode
@@ -48,8 +51,6 @@ enum TopoSortAffinity {
     TrueBranch,
     /// Visit False branch first in topological sorting
     FalseBranch,
-    /// Ignore ths block's role as a predecessor when doing topological sort
-    Neither,
 }
 
 impl Default for TopoSortAffinity {
@@ -189,7 +190,7 @@ impl<'a> FunctionCompileCtx<'a> {
 
 #[derive(Debug)]
 enum LValue {
-    LocalVariable,
+    LocalVariable(u32),
     SuperVariable,
     Subscript,
     DynamicSubscript,
@@ -311,8 +312,8 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_expr(&mut self, expr: Expr) {
         match expr {
             Expr::Binary(v) => self.compile_binary_expr(v),
-            Expr::Assign(v) => todo!(),
-            Expr::Unary(v) => todo!(),
+            Expr::Assign(v) => self.compile_assign_expr(v),
+            Expr::Unary(v) => self.compile_unary_expr(v),
             Expr::FunctionCall(v) => todo!(),
             Expr::Ident(v) => self.compile_ident_expr(v),
             Expr::Subscript(v) => todo!(),
@@ -327,7 +328,10 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_binary_expr(&mut self, v: BinaryExpr) {
         let op_kind = v.op().kind();
-        if matches!(op_kind, BinaryOpKind::OrKw | BinaryOpKind::AndKw) {
+        if matches!(
+            op_kind,
+            BinaryOpKind::ShortCircuitOr | BinaryOpKind::ShortCircuitAnd
+        ) {
             return self.compile_shortcircuit_binary_expr(v);
         }
 
@@ -353,7 +357,7 @@ impl<'a> FunctionCompileCtx<'a> {
             BinaryOpKind::Pow => Inst::Pow,
 
             // these two are specially treated
-            BinaryOpKind::OrKw | BinaryOpKind::AndKw => unreachable!(),
+            BinaryOpKind::ShortCircuitOr | BinaryOpKind::ShortCircuitAnd => unreachable!(),
         };
 
         self.curr_bb().emit(emitted);
@@ -391,7 +395,7 @@ impl<'a> FunctionCompileCtx<'a> {
         let i_bb = self.new_bb();
         let next_bb = self.new_bb();
 
-        if v.op().kind() == BinaryOpKind::AndKw {
+        if v.op().kind() == BinaryOpKind::ShortCircuitAnd {
             self.compile_expr(v.lhs());
             self.curr_bb().emit(Inst::Dup);
             self.curr_bb().set_jmp(JumpInst::Conditional(
@@ -404,7 +408,7 @@ impl<'a> FunctionCompileCtx<'a> {
             self.curr_bb().emit(Inst::Pop);
             self.compile_expr(v.rhs());
             self.curr_bb().set_jmp(JumpInst::Unconditional(next_bb));
-        } else if v.op().kind() == BinaryOpKind::OrKw {
+        } else if v.op().kind() == BinaryOpKind::ShortCircuitOr {
             self.compile_expr(v.lhs());
             self.curr_bb().emit(Inst::Dup);
             self.curr_bb().set_jmp(JumpInst::Conditional(
@@ -424,19 +428,85 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_assign_expr(&mut self, v: AssignExpr) {
-        let l_val = self.compile_left_value(v.tgt());
+        let l_val = match self.compile_left_value(v.tgt()) {
+            Some(l_val) => l_val,
+            None => return,
+        };
         self.compile_expr(v.val());
 
         match l_val {
-            LValue::LocalVariable => todo!(),
+            LValue::LocalVariable(slot) => {
+                self.curr_bb().emit_p(Inst::StoreLocal, slot);
+            }
             LValue::SuperVariable => todo!(),
             LValue::Subscript => todo!(),
             LValue::DynamicSubscript => todo!(),
         }
     }
 
-    fn compile_left_value(&mut self, v: Expr) -> LValue {
-        todo!()
+    /// Compile the given expression as a LValue. If failed, emit the error
+    /// inside and returns `None`.
+    fn compile_left_value(&mut self, v: Expr) -> Option<LValue> {
+        match v {
+            Expr::Ident(i) => self.compile_ident_left_value(i),
+            Expr::Subscript(v) => self.compile_subscript_left_value(v),
+            Expr::Dot(v) => self.compile_dot_left_value(v),
+            _ => {
+                self.emit_error(CompileError::new("not_left_value", v.span()));
+                None
+            }
+        }
+    }
+
+    fn compile_ident_left_value(&mut self, id: IdentExpr) -> Option<LValue> {
+        let name = id.ident();
+        if let Some((scope, offset, _entry)) = self.scope_map.get(name.text()) {
+            if scope == self.scope_map.id() {
+                // local variable
+                Some(LValue::LocalVariable(offset))
+            } else {
+                // captured variable
+                self.emit_error(
+                    CompileError::new("unsupported_capture", id.span())
+                        .with_message("Capturing external variables is not yet supported"),
+                );
+                Some(LValue::SuperVariable) // TODO: add scope here
+            }
+        } else {
+            self.emit_error(CompileError::new("unknown_ident", id.span()));
+            None
+        }
+    }
+
+    fn compile_subscript_left_value(&mut self, v: SubscriptExpr) -> Option<LValue> {
+        self.compile_expr(v.parent());
+        self.compile_expr(v.subscript());
+        Some(LValue::DynamicSubscript)
+    }
+
+    fn compile_dot_left_value(&mut self, v: DotExpr) -> Option<LValue> {
+        self.compile_expr(v.parent());
+        let name = v.subscript().text();
+        // TODO: insert name into symbol list
+        Some(LValue::Subscript)
+    }
+
+    fn compile_unary_expr(&mut self, v: UnaryExpr) {
+        let op = v.op();
+        match op.kind() {
+            inkstone_syn::ast::UnaryOpKind::NotKw | inkstone_syn::ast::UnaryOpKind::Not => {
+                self.compile_expr(v.lhs());
+                self.curr_bb().emit(Inst::Not);
+            }
+            inkstone_syn::ast::UnaryOpKind::Pos => {
+                self.compile_expr(v.lhs());
+            }
+            inkstone_syn::ast::UnaryOpKind::Neg => {
+                self.curr_bb().emit_p(Inst::PushI32, 0i32);
+                self.compile_expr(v.lhs());
+                self.curr_bb().emit(Inst::Sub);
+            }
+        }
     }
 
     /// Compile an identifier expression (RValue).
