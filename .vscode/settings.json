@@ -1,4 +1,8 @@
 {
     "rust-analyzer.assist.importGranularity": "module",
-    "rpc.enabled": false
+    "rpc.enabled": false,
+    "cSpell.words": [
+        "upvalue",
+        "upvalues"
+    ]
 }

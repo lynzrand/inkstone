@@ -149,6 +149,8 @@ define_inst! {
     TupleNew(len: Cnt)                    << 1,
     /// Creates a new array. Pops additional `len` items into the array.
     ArrayNew(len: Cnt)                    << 1,
+    /// Creates a new closure using the stack top. Pops `[function, scope]`.
+    ClosureNew                   >> 2     << 1,
     /// Creates a new map.
     MapNew                                << 1,
     /// Set the prototype of the object at stack top
@@ -173,26 +175,21 @@ define_inst! {
     /// Store a value into the `reg`th slot of local scope
     StoreLocal(reg: Reg)         >> 1,
 
-    // scope operations
-    /// Create a new scope that has `len` slots
-    ScopeNew(len: Cnt)                    << 1,
-    /// Load a value from the `reg`th slot of the given scope
-    ScopeLoad(idx: Reg)          >> 1     << 1,
-    /// Store a value into the `reg`th slot of the given scope
-    ScopeStore(idx: Reg)         >> 2,
-    /// Load a value from a slot of the given scope
-    ScopeLoadDyn                 >> 2     << 1,
-    /// Store a value into a slot of the given scope
-    ScopeStoreDyn                >> 3,
-    /// Assign all values in the first scope into the second scope
-    ScopeAssignAll               >> 2,
+    // upvalues
+    /// Create a new scope for closure
+    ScopeNew(len: Cnt)                     << 1,
+    /// Store the value in the scope
+    ScopeStore(reg: Reg)         >> 1,
+
+    /// Create a new upvalue, referencing the given slot in the local register
+    UpValueNew(reg: Reg)                   << 1,
+    /// Detach the given upvalue, moving it into the heap.
+    UpValueDetach                >> 1,
 
     /// Push the global scope onto stack
-    PushGlobalScope                       << 1,
+    PushGlobalObject                       << 1,
     /// Push the current module scope onto stack
-    PushModuleScope                       << 1,
-    /// Push the local function scope onto stack
-    PushLocalScope                        << 1,
+    PushModuleObject                       << 1,
 
     // function
     /// Calls the function using the given arguments

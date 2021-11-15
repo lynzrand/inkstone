@@ -192,7 +192,7 @@ impl<'a> FunctionCompileCtx<'a> {
 #[derive(Debug)]
 enum LValue {
     LocalVariable(u32),
-    SuperVariable,
+    UpValue(u32),
     Subscript,
     DynamicSubscript,
 }
@@ -440,7 +440,7 @@ impl<'a> FunctionCompileCtx<'a> {
             LValue::LocalVariable(slot) => {
                 self.curr_bb().emit_p(Inst::StoreLocal, slot);
             }
-            LValue::SuperVariable => todo!(),
+            LValue::UpValue(slot) => todo!(),
             LValue::Subscript => todo!(),
             LValue::DynamicSubscript => todo!(),
         }
@@ -462,7 +462,7 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_ident_left_value(&mut self, id: IdentExpr) -> Option<LValue> {
         let name = id.ident();
-        if let Some((scope, offset, _entry)) = self.scope_map.get(name.text()) {
+        if let Some((scope, offset)) = self.scope_map.get(name.text()) {
             if scope == self.scope_map.id() {
                 // local variable
                 Some(LValue::LocalVariable(offset))
@@ -472,7 +472,7 @@ impl<'a> FunctionCompileCtx<'a> {
                     CompileError::new("unsupported_capture", id.span())
                         .with_message("Capturing external variables is not yet supported"),
                 );
-                Some(LValue::SuperVariable) // TODO: add scope here
+                Some(LValue::UpValue(todo!())) // TODO: add scope here
             }
         } else {
             self.emit_error(CompileError::new("unknown_ident", id.span()));
@@ -518,7 +518,7 @@ impl<'a> FunctionCompileCtx<'a> {
     /// Compile an identifier expression (RValue).
     fn compile_ident_expr(&mut self, id: IdentExpr) {
         let name = id.ident();
-        if let Some((scope, offset, _entry)) = self.scope_map.get(name.text()) {
+        if let Some((scope, offset)) = self.scope_map.get(name.text()) {
             if scope == self.scope_map.id() {
                 // local variable
                 self.curr_bb().emit_p(Inst::LoadLocal, offset);
