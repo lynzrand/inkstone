@@ -594,7 +594,20 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_function_call_expr(&mut self, v: FunctionCallExpr) {
-        todo!()
+        let expr = v.func();
+        self.compile_expr(expr.clone());
+
+        let is_method_call = matches!(expr, Expr::Subscript(_) | Expr::Dot(_));
+        let param_cnt = v.params().count();
+        for param in v.params() {
+            self.compile_expr(param);
+        }
+
+        if is_method_call {
+            self.curr_bb().emit_p(Inst::Call, param_cnt as u32);
+        } else {
+            self.curr_bb().emit_p(Inst::CallMethod, param_cnt as u32);
+        }
     }
 
     /// Compile an identifier expression (RValue).
@@ -629,19 +642,84 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_subscript_expr(&mut self, v: SubscriptExpr) {
-        todo!()
+        self.compile_expr(v.parent());
+        self.compile_expr(v.subscript());
+        self.curr_bb().emit(Inst::LoadFieldDyn);
     }
 
     fn compile_dot_expr(&mut self, v: DotExpr) {
-        todo!()
+        self.compile_expr(v.parent());
+        let subscript = v.subscript();
+        let const_id = self.constants.insert_string(subscript.text());
+        self.curr_bb().emit_p(Inst::LoadField, const_id);
     }
 
     fn compile_if_expr(&mut self, v: IfExpr) {
-        todo!()
+        let mut if_bb;
+        let mut else_bb = self.curr_bb;
+        let next_bb = self.new_bb();
+
+        for branch in v.branches() {
+            // create a new block to hold branch body
+            if_bb = self.new_bb();
+
+            if let Some(cond) = branch.condition() {
+                // compile the condition
+                self.compile_expr(cond.expr());
+
+                // create a new block to hold the else branch
+                else_bb = self.new_bb();
+
+                // create a conditional jump to both branches
+                self.curr_bb().set_jmp(JumpInst::Conditional(
+                    if_bb,
+                    else_bb,
+                    TopoSortAffinity::TrueBranch,
+                ))
+            } else {
+                // create an unconditional jump since it's the only destination
+                self.curr_bb().set_jmp(JumpInst::Unconditional(if_bb))
+            }
+
+            // compile branch body
+            self.set_curr_bb(if_bb);
+            self.compile_expr(branch.body());
+
+            // jump to the end
+            self.curr_bb().set_jmp(JumpInst::Unconditional(next_bb));
+
+            // switch to else branch if needed
+            if branch.condition().is_some() {
+                self.set_curr_bb(else_bb);
+            }
+        }
+
+        self.set_curr_bb(next_bb);
     }
 
     fn compile_while_loop_expr(&mut self, v: WhileLoopExpr) {
-        todo!()
+        let loop_header_bb = self.new_bb();
+        let loop_body_bb = self.new_bb();
+        let next_bb = self.new_bb();
+
+        self.curr_bb()
+            .set_jmp(JumpInst::Unconditional(loop_header_bb));
+        self.set_curr_bb(loop_header_bb);
+
+        self.compile_expr(v.condition().expr());
+        self.curr_bb().set_jmp(JumpInst::Conditional(
+            loop_body_bb,
+            next_bb,
+            TopoSortAffinity::TrueBranch,
+        ));
+
+        self.set_curr_bb(loop_body_bb);
+        self.compile_block_scope(v.body());
+
+        self.curr_bb()
+            .set_jmp(JumpInst::Unconditional(loop_header_bb));
+
+        self.set_curr_bb(next_bb);
     }
 
     fn compile_for_loop_expr(&mut self, v: ForLoopExpr) {

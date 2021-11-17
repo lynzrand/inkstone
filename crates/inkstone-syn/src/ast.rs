@@ -12,7 +12,7 @@ use crate::{SyntaxNode, SyntaxToken};
 /// 2.  enum
 macro_rules! ast_node {
     ($name:ident, $kind:pat) => {
-        #[derive(Debug, Hash, PartialEq, Eq)]
+        #[derive(Debug, Hash, PartialEq, Eq, Clone)]
         pub struct $name {
             node: SyntaxNode,
         }
@@ -39,7 +39,7 @@ macro_rules! ast_node {
     ($name:ident, {
         $( $kind:pat => ($kind_name:ident, $ty:ty) ),*
     }) => {
-        #[derive(Debug, Hash, PartialEq, Eq)]
+        #[derive(Debug, Hash, PartialEq, Eq, Clone)]
         pub enum $name {
             $($kind_name($ty)),*
         }
@@ -84,7 +84,7 @@ macro_rules! ast_node {
             $($kind_name),*
         }
 
-        #[derive(Debug, Hash, PartialEq, Eq)]
+        #[derive(Debug, Hash, PartialEq, Eq, Clone)]
         pub struct $name {
             kind: $enum_name,
             node: SyntaxNode,
