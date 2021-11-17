@@ -3,15 +3,53 @@ use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 use crate::error::CompileError;
-use crate::scope::{self, LexicalScope, Scope, ScopeEntry, ScopeType};
+use crate::scope::{self, LexicalScope, Scope, ScopeEntry, ScopeType, ScopeVariable};
 use crate::SymbolListBuilder;
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst};
 use inkstone_syn::ast::{
     AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope, DotExpr, Expr, ExprStmt,
     ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
     Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
 };
+use smol_str::SmolStr;
+
+pub struct SmolStrInterner {
+    v: RefCell<FnvHashSet<SmolStr>>,
+}
+
+impl std::fmt::Debug for SmolStrInterner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmolStrInterner").finish()
+    }
+}
+
+impl SmolStrInterner {
+    pub fn new() -> Self {
+        Self {
+            v: Default::default(),
+        }
+    }
+
+    pub fn intern(&self, s: &str) -> SmolStr {
+        if s.len() <= 22 {
+            SmolStr::new_inline(s)
+        } else {
+            let mut m = self.v.borrow_mut();
+            m.get(s).cloned().unwrap_or_else(|| {
+                let s = SmolStr::new(s);
+                m.insert(s.clone());
+                s
+            })
+        }
+    }
+}
+
+impl Default for SmolStrInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// A block of code with no branch inside
 #[derive(Debug, Default)]
@@ -65,16 +103,18 @@ impl BasicBlock {
         Default::default()
     }
 
-    pub fn emit_p(&mut self, inst: Inst, param: impl IParamType) {
-        write_inst(&mut self.inst, inst, param)
+    pub fn emit_p(&mut self, inst: Inst, param: impl IParamType) -> &mut Self {
+        write_inst(&mut self.inst, inst, param);
+        self
     }
 
     pub fn write_param(&mut self, param: impl IParamType) {
         param.write(&mut self.inst)
     }
 
-    pub fn emit(&mut self, inst: Inst) {
-        write_inst(&mut self.inst, inst, ())
+    pub fn emit(&mut self, inst: Inst) -> &mut Self {
+        write_inst(&mut self.inst, inst, ());
+        self
     }
 
     pub fn set_jmp(&mut self, inst: JumpInst) {
@@ -106,16 +146,18 @@ impl BasicBlock {
 pub enum Constant {
     Int64(i64),
     Float64(u64),
-    String,
-    Symbol,
+    String(SmolStr),
+    Symbol(SmolStr),
     Closure,
 }
 
 /// Type used to build a constant table
 #[derive(Debug, Default)]
 pub struct ConstantTableBuilder {
+    string_interner: Rc<SmolStrInterner>,
     constants: Vec<Constant>,
     reverse_map: FnvHashMap<Constant, u32>,
+    reverse_string_map: FnvHashMap<SmolStr, u32>,
 }
 
 impl ConstantTableBuilder {
@@ -123,19 +165,49 @@ impl ConstantTableBuilder {
         Self::default()
     }
 
-    pub fn insert(&mut self, v: Constant) -> u32 {
+    pub fn insert_string(&mut self, s: &str) -> u32 {
+        if let Some(v) = self.reverse_string_map.get(s) {
+            *v
+        } else {
+            self.do_insert_constant(Constant::String(s.into()))
+        }
+    }
+
+    pub fn insert_symbol(&mut self, s: &str) -> u32 {
+        todo!()
+    }
+
+    pub fn insert(&mut self, mut v: Constant) -> u32 {
         if let Some(&v) = self.reverse_map.get(&v) {
             return v;
         }
 
+        if let Constant::String(s) | Constant::Symbol(s) = &v {
+            let new_val = self.string_interner.intern(s);
+            v = match v {
+                Constant::String(_) => Constant::String(new_val),
+                Constant::Symbol(_) => Constant::Symbol(new_val),
+                _ => unreachable!(),
+            }
+        }
+
+        self.do_insert_constant(v)
+    }
+
+    fn do_insert_constant(&mut self, v: Constant) -> u32 {
         let id = self.constants.len();
         assert!(
             id < u32::MAX as usize,
-            "Cannot allocate more than 32 constants"
+            "Cannot allocate more than 2^32 constants"
         );
         let id = id as u32;
-
         self.constants.push(v.clone());
+        match &v {
+            Constant::String(s) => {
+                self.reverse_string_map.insert(s.clone(), id);
+            }
+            _ => {}
+        }
         self.reverse_map.insert(v, id);
         id
     }
@@ -193,7 +265,7 @@ impl<'a> FunctionCompileCtx<'a> {
 enum LValue {
     LocalVariable(u32),
     UpValue(u32),
-    Subscript,
+    Subscript(u32),
     DynamicSubscript,
 }
 
@@ -440,9 +512,15 @@ impl<'a> FunctionCompileCtx<'a> {
             LValue::LocalVariable(slot) => {
                 self.curr_bb().emit_p(Inst::StoreLocal, slot);
             }
-            LValue::UpValue(slot) => todo!(),
-            LValue::Subscript => todo!(),
-            LValue::DynamicSubscript => todo!(),
+            LValue::UpValue(slot) => {
+                self.curr_bb().emit_p(Inst::StoreUpvalue, slot);
+            }
+            LValue::Subscript(const_id) => {
+                self.curr_bb().emit_p(Inst::StoreField, const_id);
+            }
+            LValue::DynamicSubscript => {
+                self.curr_bb().emit(Inst::StoreFieldDyn);
+            }
         }
     }
 
@@ -488,9 +566,9 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_dot_left_value(&mut self, v: DotExpr) -> Option<LValue> {
         self.compile_expr(v.parent());
-        let name = v.subscript().text();
-        // TODO: insert name into symbol list
-        Some(LValue::Subscript)
+        let subscript = v.subscript();
+        let const_id = self.constants.insert_string(subscript.text());
+        Some(LValue::Subscript(const_id))
     }
 
     fn compile_unary_expr(&mut self, v: UnaryExpr) {
@@ -518,27 +596,31 @@ impl<'a> FunctionCompileCtx<'a> {
     /// Compile an identifier expression (RValue).
     fn compile_ident_expr(&mut self, id: IdentExpr) {
         let name = id.ident();
-        if let Some((scope, offset)) = self.scope_map.get(name.text()) {
-            if scope == self.scope_map.id() {
-                // local variable
-                self.curr_bb().emit_p(Inst::LoadLocal, offset);
-            } else {
-                // captured variable
-                self.emit_error(
-                    CompileError::new("unsupported_capture", id.span())
-                        .with_message("Capturing external variables is not yet supported"),
-                )
+        match self.scope_map.get_local_or_add_upvalue(name.text()) {
+            Some(ScopeVariable::Local(slot)) => {
+                self.curr_bb().emit_p(Inst::LoadLocal, slot);
             }
-        } else {
-            self.emit_error(CompileError::new("unknown_ident", id.span()));
-            // error recovery: insert this variable. It is now undefined.
-            self.scope_map.insert(
-                name.text().into(),
-                ScopeEntry {
-                    kind: scope::ScopeEntryKind::Variable,
-                    is_public: false,
-                },
-            );
+            Some(ScopeVariable::Upvalue(slot)) => {
+                // captured variable
+                self.curr_bb().emit_p(Inst::LoadUpvalue, slot);
+            }
+            Some(ScopeVariable::Module) => {
+                let c = self.constants.insert_string(name.text());
+                self.curr_bb()
+                    .emit(Inst::PushModuleObject)
+                    .emit_p(Inst::LoadField, c);
+            }
+            None => {
+                self.emit_error(CompileError::new("unknown_ident", id.span()));
+                // error recovery: insert this variable. It is now undefined.
+                self.scope_map.insert(
+                    name.text().into(),
+                    ScopeEntry {
+                        kind: scope::ScopeEntryKind::Variable,
+                        is_public: false,
+                    },
+                );
+            }
         }
     }
 
@@ -590,10 +672,19 @@ impl<'a> FunctionCompileCtx<'a> {
                 let id = self.constants.insert(Constant::Float64(f.to_bits()));
                 self.curr_bb().emit_p(Inst::PushConst, id);
             }
-            inkstone_syn::ast::LiteralKind::True => self.curr_bb().emit(Inst::PushTrue),
-            inkstone_syn::ast::LiteralKind::False => self.curr_bb().emit(Inst::PushFalse),
-            inkstone_syn::ast::LiteralKind::Nil => self.curr_bb().emit(Inst::PushNil),
-            inkstone_syn::ast::LiteralKind::String => todo!(),
+            inkstone_syn::ast::LiteralKind::True => {
+                self.curr_bb().emit(Inst::PushTrue);
+            }
+            inkstone_syn::ast::LiteralKind::False => {
+                self.curr_bb().emit(Inst::PushFalse);
+            }
+            inkstone_syn::ast::LiteralKind::Nil => {
+                self.curr_bb().emit(Inst::PushNil);
+            }
+            inkstone_syn::ast::LiteralKind::String => {
+                let const_id = self.constants.insert_string(lit.token().text());
+                self.curr_bb().emit_p(Inst::PushConst, const_id);
+            }
             inkstone_syn::ast::LiteralKind::Symbol => todo!(),
         }
     }

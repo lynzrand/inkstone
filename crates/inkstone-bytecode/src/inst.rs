@@ -176,15 +176,19 @@ define_inst! {
     StoreLocal(reg: Reg)         >> 1,
 
     // upvalues
-    /// Create a new scope for closure
-    ScopeNew(len: Cnt)                     << 1,
-    /// Store the value in the scope
-    ScopeStore(reg: Reg)         >> 1,
-
-    /// Create a new upvalue, referencing the given slot in the local register
-    UpValueNew(reg: Reg)                   << 1,
+    /// Create a new upvalue capture scope from the corresponding values on stack
+    UpValueScopeNew(len: Cnt)             << 1,
+    /// Create a new upvalue, referencing the given slot in the local register. Only emitted before
+    /// `UpValueScopeNew`
+    WithUpvalue(reg: Reg)                 << 1,
+    /// Copy the upvalue in the given slot of upvalues array. Only emitted before `UpValueScopeNew`
+    WithUpvalueCopy(reg: Reg)             << 1,
+    /// Load the specified upvalue onto stack
+    LoadUpvalue(reg: Reg)                 << 1,
+    /// Store the value on stack to the given upvalue
+    StoreUpvalue(reg: Reg)       >> 1,
     /// Detach the given upvalue, moving it into the heap.
-    UpValueDetach                >> 1,
+    UpValueDetach(reg: Reg),
 
     /// Push the global scope onto stack
     PushGlobalObject                       << 1,

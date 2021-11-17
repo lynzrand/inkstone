@@ -145,6 +145,15 @@ impl<'a> Scope<'a> {
             .super_scope
             .and_then(|scope| scope.get_local_or_add_upvalue(name))
         {
+            if self
+                .super_scope
+                .map(|s| s.super_scope.is_none())
+                .unwrap_or_default()
+            {
+                // super scope is module scope
+                return Some(ScopeVariable::Module);
+            }
+
             let mut capture = self.upvalue_capture.borrow_mut();
             if let Some(slot) = capture.get(&slot) {
                 return Some(ScopeVariable::Upvalue(slot));
@@ -163,6 +172,8 @@ pub enum ScopeVariable {
     Local(u32),
     /// This value is an upvalue at the given upvalue slot
     Upvalue(u32),
+    /// This value is the specified named object in module scope
+    Module,
 }
 
 /// A lexical scope that holds local variables. variables are stored in the
