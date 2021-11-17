@@ -310,6 +310,7 @@ ast_node!(Expr, {
     SynTag::UnaryExpr        => (Unary, UnaryExpr),
     SynTag::FunctionCallExpr => (FunctionCall, FunctionCallExpr),
     SynTag::IdentExpr        => (Ident, IdentExpr),
+    SynTag::ParenExpr        => (Paren, ParenExpr),
     SynTag::SubscriptExpr    => (Subscript, SubscriptExpr),
     SynTag::DotExpr          => (Dot, DotExpr),
     SynTag::IfExpr           => (If, IfExpr),
@@ -317,6 +318,9 @@ ast_node!(Expr, {
     SynTag::ForLoopExpr      => (For, ForLoopExpr),
     SynTag::BlockExpr        => (Block, BlockExpr),
     SynTag::LiteralExpr      => (Literal, LiteralExpr),
+    SynTag::TupleLiteralExpr => (Tuple, TupleLiteralExpr),
+    SynTag::ArrayLiteralExpr => (Array, ArrayLiteralExpr),
+    SynTag::ObjectLiteralExpr=> (Object, ObjectLiteralExpr),
     SynTag::LambdaExpr       => (Lambda, LambdaExpr)
 });
 
@@ -450,6 +454,23 @@ ast_node!(token: LiteralExpr, LiteralKind, {
     SynTag::FalseKw => False,
     SynTag::NilKw => Nil
 });
+
+ast_node!(ParenExpr, SynTag::ParenExpr);
+impl ParenExpr {
+    impl_child!(1!, inner, Expr);
+}
+
+ast_node!(TupleLiteralExpr, SynTag::TupleLiteralExpr);
+impl TupleLiteralExpr {
+    impl_child!(n, items, Expr);
+}
+
+ast_node!(ArrayLiteralExpr, SynTag::ArrayLiteralExpr);
+impl ArrayLiteralExpr {
+    impl_child!(n, items, Expr);
+}
+
+ast_node!(ObjectLiteralExpr, SynTag::ObjectLiteralExpr);
 
 ast_node!(Binding, SynTag::Binding);
 impl Binding {

@@ -389,6 +389,7 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Unary(v) => self.compile_unary_expr(v),
             Expr::FunctionCall(v) => self.compile_function_call_expr(v),
             Expr::Ident(v) => self.compile_ident_expr(v),
+            Expr::Paren(v) => self.compile_expr(v.inner()),
             Expr::Subscript(v) => self.compile_subscript_expr(v),
             Expr::Dot(v) => self.compile_dot_expr(v),
             Expr::If(v) => self.compile_if_expr(v),
@@ -397,6 +398,9 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Block(v) => self.compile_block_expr(v),
             Expr::Literal(v) => self.compile_literal_expr(v),
             Expr::Lambda(v) => self.compile_lambda_expr(v),
+            Expr::Tuple(_) => todo!(),
+            Expr::Array(_) => todo!(),
+            Expr::Object(_) => todo!(),
         }
     }
 
