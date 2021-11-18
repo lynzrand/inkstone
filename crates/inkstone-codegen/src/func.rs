@@ -288,6 +288,20 @@ impl<'a> FunctionCompileCtx<'a> {
         self.compile_block_scope(scope)
     }
 
+    pub fn compile_function_scope(&mut self, scope: FuncDef) {
+        // ensure the params are the first n local values
+        for it in scope.param_list().params() {
+            self.scope_map.insert(
+                it.name().text().into(),
+                ScopeEntry {
+                    kind: scope::ScopeEntryKind::Variable,
+                    is_public: false,
+                },
+            );
+        }
+        self.compile_expr(scope.body());
+    }
+
     fn scope_scan_let(&mut self, v: LetStmt) {
         let is_public = v.vis().and_then(|v| v.public());
         if is_public.is_some() {
@@ -329,7 +343,7 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_stmt(&mut self, stmt: Stmt) {
         match stmt {
             Stmt::Expr(v) => self.compile_expr_stmt(v),
-            Stmt::Def(v) => todo!(),
+            Stmt::Def(v) => self.compile_def_stmt(v),
             Stmt::Let(v) => self.compile_let_stmt(v),
             Stmt::Use(v) => todo!(),
             Stmt::Mod(v) => todo!(),
@@ -340,6 +354,22 @@ impl<'a> FunctionCompileCtx<'a> {
         self.compile_expr(v.expr());
         // pop the remaining value and call it a day
         self.curr_bb().emit(Inst::Pop);
+    }
+
+    fn compile_def_stmt(&mut self, v: FuncDef) {
+        let mut cx = FunctionCompileCtx::new(
+            Scope::new(
+                v.node().text_range().start().into(),
+                ScopeType::Function,
+                Some(&self.scope_map),
+            ),
+            self.symbol_list.clone(),
+        );
+        cx.compile_function_scope(v);
+
+        let _f = cx.finalize();
+
+        todo!()
     }
 
     fn compile_let_stmt(&mut self, let_stmt: LetStmt) {
@@ -777,5 +807,7 @@ impl<'a> FunctionCompileCtx<'a> {
 }
 
 impl FunctionCompileCtx<'_> {
-    pub fn finalize(self) {}
+    pub fn finalize(self) {
+        todo!()
+    }
 }
