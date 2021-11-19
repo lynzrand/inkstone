@@ -1,12 +1,14 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::error::CompileError;
 use crate::scope::{self, LexicalScope, Scope, ScopeEntry, ScopeType, ScopeVariable};
 use crate::SymbolListBuilder;
 use fnv::{FnvHashMap, FnvHashSet};
 use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst};
+use inkstone_bytecode::{Constant, Function};
 use inkstone_syn::ast::{
     AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope, DotExpr, Expr, ExprStmt,
     ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
@@ -140,15 +142,6 @@ impl BasicBlock {
         }
         None
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Constant {
-    Int64(i64),
-    Float64(u64),
-    String(SmolStr),
-    Symbol(SmolStr),
-    Closure,
 }
 
 /// Type used to build a constant table
@@ -574,21 +567,20 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_ident_left_value(&mut self, id: IdentExpr) -> Option<LValue> {
         let name = id.ident();
-        if let Some((scope, offset)) = self.scope_map.get(name.text()) {
-            if scope == self.scope_map.id() {
-                // local variable
-                Some(LValue::LocalVariable(offset))
-            } else {
-                // captured variable
-                self.emit_error(
-                    CompileError::new("unsupported_capture", id.span())
-                        .with_message("Capturing external variables is not yet supported"),
-                );
-                Some(LValue::UpValue(todo!())) // TODO: add scope here
+        match self.scope_map.get_local_or_add_upvalue(name.text()) {
+            Some(val) => match val {
+                ScopeVariable::Local(slot) => Some(LValue::LocalVariable(slot)),
+                ScopeVariable::Upvalue(slot) => Some(LValue::UpValue(slot)),
+                ScopeVariable::Module => {
+                    self.curr_bb().emit(Inst::PushModuleObject);
+                    let const_id = self.constants.insert_string(name.text());
+                    Some(LValue::Subscript(const_id))
+                }
+            },
+            None => {
+                self.emit_error(CompileError::new("unknown_ident", id.span()));
+                None
             }
-        } else {
-            self.emit_error(CompileError::new("unknown_ident", id.span()));
-            None
         }
     }
 

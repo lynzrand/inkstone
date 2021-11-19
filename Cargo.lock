@@ -175,6 +175,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "enum-ordinalize",
+ "smol_str",
 ]
 
 [[package]]
