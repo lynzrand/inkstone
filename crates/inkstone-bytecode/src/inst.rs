@@ -107,7 +107,7 @@ define_inst! {
     /// Push a 32-bit integer constant
     PushI32(num: Int)                     << 1,
     /// Push a value inside the constant table
-    PushConst(idx: Idx)                   << 1,
+    PushConst(idx: ConstIdx)                   << 1,
     /// Push boolean true
     PushTrue                              << 1,
     /// Push boolean false
@@ -159,9 +159,9 @@ define_inst! {
     GetPrototype                 >> 1     << 1,
 
     /// Load a field from an object using the `idx`th constant in table as index.
-    LoadField(idx: Idx)          >> 1     << 1,
+    LoadField(idx: ConstIdx)          >> 1     << 1,
     /// Store a field into an object using the `idx`th constant in table as index.
-    StoreField(idx: Idx)         >> 2,
+    StoreField(idx: ConstIdx)         >> 2,
     /// Load a field from an object using a dynamic symbol or number as index.
     LoadFieldDyn                 >> 2     << 1,
     /// Storing a field from an object using a dynamic symbol or number as index.
@@ -180,15 +180,15 @@ define_inst! {
     UpValueScopeNew(len: Cnt)             << 1,
     /// Create a new upvalue, referencing the given slot in the local register. Only emitted before
     /// `UpValueScopeNew`
-    WithUpvalue(reg: Reg)                 << 1,
+    WithUpvalue(reg: UpReg)                 << 1,
     /// Copy the upvalue in the given slot of upvalues array. Only emitted before `UpValueScopeNew`
-    WithUpvalueCopy(reg: Reg)             << 1,
+    WithUpvalueCopy(reg: UpReg)             << 1,
     /// Load the specified upvalue onto stack
-    LoadUpvalue(reg: Reg)                 << 1,
+    LoadUpvalue(reg: UpReg)                 << 1,
     /// Store the value on stack to the given upvalue
-    StoreUpvalue(reg: Reg)       >> 1,
+    StoreUpvalue(reg: UpReg)       >> 1,
     /// Detach the given upvalue, moving it into the heap.
-    UpValueDetach(reg: Reg),
+    UpValueDetach(reg: UpReg),
 
     /// Push the global scope onto stack
     PushGlobalObject                       << 1,
@@ -198,11 +198,11 @@ define_inst! {
 
     // control flow
     /// Branch to the specified label entry
-    Br(label: Idx),
+    Br(label: Label),
     /// Branch to the specified label entry if the stack top is _truthy_.
-    BrIfTrue(label: Idx)        >> 1,
+    BrIfTrue(label: Label)        >> 1,
     /// Branch to the specified label entry if the stack top is _falsy_.
-    BrIfFalse(label: Idx)       >> 1,
+    BrIfFalse(label: Label)       >> 1,
 
 
     // function

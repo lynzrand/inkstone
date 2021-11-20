@@ -236,7 +236,7 @@ impl Display for Idx {
 }
 
 impl IParamType for Idx {
-    const PARAM_ENUM_TY: ParamType = ParamType::Idx;
+    const PARAM_ENUM_TY: ParamType = ParamType::ConstIdx;
     const MAX_RESERVE_LEN: usize = U32_MAX_RESERVE_LEN;
 
     fn validate(r: impl Buf) -> bool {
@@ -304,9 +304,13 @@ param_types! {
     ParamType,
     None,(),
     /// A register in scope
-    Reg, Reg,
+    Reg, u32,
+    /// An upvalue register
+    UpReg, u32,
     /// An index in constant table
-    Idx, Idx,
+    ConstIdx, u32,
+    /// A label pointing to an instruction
+    Label, u32,
     /// An integer constant
     Int, i32,
     /// Count or length of another value

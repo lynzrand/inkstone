@@ -14,6 +14,7 @@ pub struct Function {
     pub binds_self: bool,
     pub has_rest_param: bool,
     pub constants: Vec<Constant>,
+    pub labels: Vec<u32>,
     pub metadata: Option<FunctionMetadata>,
 }
 
