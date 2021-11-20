@@ -195,6 +195,16 @@ define_inst! {
     /// Push the current module scope onto stack
     PushModuleObject                       << 1,
 
+
+    // control flow
+    /// Branch to the specified label entry
+    Br(label: Idx),
+    /// Branch to the specified label entry if the stack top is _truthy_.
+    BrIfTrue(label: Idx)        >> 1,
+    /// Branch to the specified label entry if the stack top is _falsy_.
+    BrIfFalse(label: Idx)       >> 1,
+
+
     // function
     /// Calls the function using the given arguments
     Call(n_args: Cnt)            >> 1     << 1,
