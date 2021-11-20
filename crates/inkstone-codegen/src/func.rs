@@ -328,7 +328,15 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     pub fn compile_block_scope(&mut self, scope: BlockScope) {
+        let mut first = true;
         for stmt in scope.stmt() {
+            if first {
+                first = false
+            } else {
+                // pop the last result out
+                self.curr_bb().emit(Inst::Pop);
+            }
+
             self.compile_stmt(stmt);
         }
     }
@@ -424,6 +432,9 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Tuple(_) => todo!(),
             Expr::Array(_) => todo!(),
             Expr::Object(_) => todo!(),
+            Expr::Return(_) => todo!(),
+            Expr::Break(_) => todo!(),
+            Expr::Continue(_) => todo!(),
         }
     }
 
@@ -796,6 +807,10 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_lambda_expr(&mut self, v: LambdaExpr) {
         todo!()
     }
+}
+
+fn condense_basic_blocks(bbs: Vec<BasicBlock>) -> Vec<u8> {
+    todo!()
 }
 
 impl FunctionCompileCtx<'_> {

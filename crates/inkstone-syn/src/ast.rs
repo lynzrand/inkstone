@@ -316,6 +316,9 @@ ast_node!(Expr, {
     SynTag::IfExpr           => (If, IfExpr),
     SynTag::WhileLoopExpr    => (While, WhileLoopExpr),
     SynTag::ForLoopExpr      => (For, ForLoopExpr),
+    SynTag::ReturnExpr       => (Return, ReturnExpr),
+    SynTag::BreakExpr        => (Break, BreakExpr),
+    SynTag::ContinueExpr     => (Continue, ContinueExpr),
     SynTag::BlockExpr        => (Block, BlockExpr),
     SynTag::LiteralExpr      => (Literal, LiteralExpr),
     SynTag::TupleLiteralExpr => (Tuple, TupleLiteralExpr),
@@ -439,6 +442,18 @@ impl ForCondition {
     impl_child!(1!, binding, Binding);
     impl_child!(1!, expr, Expr);
 }
+
+ast_node!(ReturnExpr, SynTag::ReturnExpr);
+impl ReturnExpr {
+    impl_child!(1, expr, Expr);
+}
+
+ast_node!(BreakExpr, SynTag::BreakExpr);
+impl BreakExpr {
+    impl_child!(1, expr, Expr);
+}
+
+ast_node!(ContinueExpr, SynTag::ContinueExpr);
 
 ast_node!(BlockExpr, SynTag::BlockExpr);
 impl BlockExpr {

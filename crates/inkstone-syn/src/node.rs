@@ -37,6 +37,8 @@ pub enum SynTag {
     WhileKw,
     #[token("break")]
     BreakKw,
+    #[token("continue")]
+    ContinueKw,
     #[token("return")]
     ReturnKw,
     #[token("match")]
@@ -191,6 +193,8 @@ pub enum SynTag {
 
     // (:BreakExpr (:Expr ...)?)
     BreakExpr,
+    // (:ContinueExpr ...)
+    ContinueExpr,
     // (:ReturnExpr (:Expr ...)?)
     ReturnExpr,
     // (:IfExpr
