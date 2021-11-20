@@ -1,5 +1,6 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -14,6 +15,7 @@ use inkstone_syn::ast::{
     ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
     Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
 };
+use itertools::Itertools;
 use smol_str::SmolStr;
 
 pub struct SmolStrInterner {
@@ -368,7 +370,18 @@ impl<'a> FunctionCompileCtx<'a> {
         );
         cx.compile_function_scope(v);
 
-        let _f = cx.finalize();
+        let f = Arc::new(cx.finalize());
+
+        let c_entry = todo!("Add f to constant table");
+        self.curr_bb().emit_p(Inst::PushConst, c_entry);
+
+        let captures = [todo!("function's upvalue capture")];
+        for capture in captures {
+            self.curr_bb().emit_p(Inst::WithUpvalue, capture);
+        }
+
+        self.curr_bb()
+            .emit_p(Inst::ClosureNew, todo!("Capture count"));
 
         todo!()
     }
@@ -809,12 +822,137 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 }
 
+fn bb_scheduling(bbs: &[BasicBlock]) -> Vec<usize> {
+    use itertools::Itertools;
+    use petgraph::graphmap::*;
+
+    let mut graph = DiGraphMap::new();
+    for (idx, bb) in bbs.iter().enumerate() {
+        match &bb.jmp {
+            JumpInst::Unconditional(t) => {
+                graph.add_edge(idx, *t, 1);
+            }
+            JumpInst::Conditional(t, f, order) => {
+                let (t_weight, f_weight) = match order {
+                    TopoSortAffinity::IDontCare => (1, 1),
+                    TopoSortAffinity::TrueBranch => (1, 0),
+                    TopoSortAffinity::FalseBranch => (0, 1),
+                };
+                graph.add_edge(idx, *t, t_weight);
+                graph.add_edge(idx, *f, f_weight);
+            }
+            JumpInst::Unknown | JumpInst::Return | JumpInst::ReturnNil => {}
+        }
+    }
+
+    struct EdgeWeighted<'a, X, Y, Z>(&'a GraphMap<X, Y, Z>);
+
+    impl<'a, X, Y, Z> Clone for EdgeWeighted<'a, X, Y, Z> {
+        fn clone(&self) -> Self {
+            Self(self.0)
+        }
+    }
+
+    impl<'a, X, Y, Z> Copy for EdgeWeighted<'a, X, Y, Z> {}
+
+    impl<'a, X: NodeTrait, Y: Copy + Eq, Z: petgraph::EdgeType> petgraph::visit::GraphBase
+        for EdgeWeighted<'a, X, Y, Z>
+    {
+        type EdgeId = Y;
+        type NodeId = X;
+    }
+
+    impl<'a, X: NodeTrait, Y: Copy + Eq, Z: petgraph::EdgeType> petgraph::visit::GraphRef
+        for EdgeWeighted<'a, X, Y, Z>
+    {
+    }
+
+    impl<'a, X: NodeTrait, Y: Copy + Eq, Z: petgraph::EdgeType> Deref for EdgeWeighted<'a, X, Y, Z> {
+        type Target = GraphMap<X, Y, Z>;
+
+        fn deref(&self) -> &Self::Target {
+            self.0
+        }
+    }
+
+    impl<'a, X: NodeTrait, Y: Copy + Eq + Ord, Z: petgraph::EdgeType> petgraph::visit::IntoNeighbors
+        for EdgeWeighted<'a, X, Y, Z>
+    {
+        type Neighbors = std::vec::IntoIter<X>;
+
+        fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
+            self.0.neighbors(a).sorted_by(|x1, x2| {
+                self.0
+                    .edge_weight(a, *x1)
+                    .unwrap()
+                    .cmp(self.0.edge_weight(a, *x2).unwrap())
+            })
+        }
+    }
+
+    impl<'a, X: NodeTrait, Y: Copy + Eq + Ord, Z: petgraph::EdgeType> petgraph::visit::Visitable
+        for EdgeWeighted<'a, X, Y, Z>
+    {
+        type Map = FnvHashSet<X>;
+
+        fn visit_map(&self) -> Self::Map {
+            FnvHashSet::default()
+        }
+
+        fn reset_map(&self, map: &mut Self::Map) {
+            map.clear();
+        }
+    }
+
+    let graph_ref = EdgeWeighted(&graph);
+
+    let mut visitor = petgraph::visit::DfsPostOrder::new(graph_ref, 0);
+    let mut result = vec![];
+    while let Some(n) = visitor.next(graph_ref) {
+        result.push(n);
+    }
+
+    result.reverse();
+    result
+}
+
 fn condense_basic_blocks(bbs: Vec<BasicBlock>) -> Vec<u8> {
+    let bb_seq = bb_scheduling(&bbs);
+    let bb_lengths = bbs.iter().map(|bb| bb.inst.len()).collect::<Vec<_>>();
+
+    // Fusion between basic blocks
+    let fused_bb = bb_seq
+        .iter()
+        .copied()
+        .tuple_windows()
+        .map(|(f, s)| match bbs[f].jmp {
+            JumpInst::Unconditional(t) => {
+                if t == s {
+                    Some(true)
+                } else {
+                    None
+                }
+            }
+            JumpInst::Conditional(t, f, _) => {
+                if t == s {
+                    Some(true)
+                } else if f == s {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            JumpInst::Unknown | JumpInst::Return | JumpInst::ReturnNil => None,
+        })
+        .collect_vec();
+
+    // We simply assume all jump instructions take their maximum size, i.e. 6 bytes.
+
     todo!()
 }
 
 impl FunctionCompileCtx<'_> {
-    pub fn finalize(self) {
+    pub fn finalize(self) -> Function {
         todo!()
     }
 }

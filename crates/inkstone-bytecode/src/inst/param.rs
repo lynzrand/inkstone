@@ -36,42 +36,58 @@ pub(crate) fn u64_write_length(v: u64) -> usize {
 
 pub(crate) fn write_u32(v: u32, mut buf: impl BufMut) {
     match v {
-        0..=0x7f => {
-            buf.put_u8(v as u8);
-        }
-        0x80..=0xff => {
-            buf.put_u8(0x81);
-            buf.put_u8(v as u8);
-        }
-        0x100..=0xffff => {
-            buf.put_u8(0x82);
-            buf.put_u16_le(v as u16);
-        }
-        0x10000..=0xffffffff => {
-            buf.put_u8(0x83);
-            buf.put_u32_le(v);
-        }
+        0..=0x7f => write_fixed_u7(&mut buf, v),
+        0x80..=0xff => write_fixed_u8(&mut buf, v),
+        0x100..=0xffff => write_fixed_u16(&mut buf, v),
+        0x10000..=0xffffffff => write_fixed_u32(buf, v),
     }
+}
+
+fn write_fixed_u32(mut buf: impl BufMut, v: u32) {
+    buf.put_u8(0x83);
+    buf.put_u32_le(v);
+}
+
+fn write_fixed_u16(buf: &mut impl BufMut, v: u32) {
+    buf.put_u8(0x82);
+    buf.put_u16_le(v as u16);
+}
+
+fn write_fixed_u8(buf: &mut impl BufMut, v: u32) {
+    buf.put_u8(0x81);
+    buf.put_u8(v as u8);
+}
+
+fn write_fixed_u7(buf: &mut impl BufMut, v: u32) {
+    buf.put_u8(v as u8);
 }
 
 pub(crate) fn write_i32(v: i32, mut buf: impl BufMut) {
     match v {
-        -0x40..=0x3f => {
-            buf.put_u8(i8_to_u7(v as i8));
-        }
-        0x40..=0x7f | -0x80..=-0x41 => {
-            buf.put_u8(0x81);
-            buf.put_i8(v as i8);
-        }
-        0x80..=0x7fff | -0x8000..=-0x81 => {
-            buf.put_u8(0x82);
-            buf.put_i16_le(v as i16);
-        }
-        _ => {
-            buf.put_u8(0x83);
-            buf.put_i32_le(v);
-        }
+        -0x40..=0x3f => write_fixed_i7(&mut buf, v),
+        0x40..=0x7f | -0x80..=-0x41 => write_fixed_i8(&mut buf, v),
+        0x80..=0x7fff | -0x8000..=-0x81 => write_fixed_i16(&mut buf, v),
+        _ => write_fixed_i32(buf, v),
     }
+}
+
+fn write_fixed_i32(mut buf: impl BufMut, v: i32) {
+    buf.put_u8(0x83);
+    buf.put_i32_le(v);
+}
+
+fn write_fixed_i16(buf: &mut impl BufMut, v: i32) {
+    buf.put_u8(0x82);
+    buf.put_i16_le(v as i16);
+}
+
+fn write_fixed_i8(buf: &mut impl BufMut, v: i32) {
+    buf.put_u8(0x81);
+    buf.put_i8(v as i8);
+}
+
+fn write_fixed_i7(buf: &mut impl BufMut, v: i32) {
+    buf.put_u8(i8_to_u7(v as i8));
 }
 
 /// Convert a compressed 7-bit unsigned integer into 8-bit integer
