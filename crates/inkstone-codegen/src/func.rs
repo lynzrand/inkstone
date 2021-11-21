@@ -15,6 +15,7 @@ use inkstone_syn::ast::{
     ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
     Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
 };
+use inkstone_syn::parse::tag_util;
 use itertools::Itertools;
 use smol_str::SmolStr;
 
@@ -77,6 +78,7 @@ enum JumpInst {
     Conditional(usize, usize, TopoSortAffinity),
     Return,
     ReturnNil,
+    TailCall,
 }
 
 impl Default for JumpInst {
@@ -294,7 +296,21 @@ impl<'a> FunctionCompileCtx<'a> {
                 },
             );
         }
-        self.compile_expr(scope.body());
+        self.compile_expr_with_tail(scope.body(), true);
+    }
+
+    pub fn compile_lambda_scope(&mut self, scope: LambdaExpr) {
+        // ensure the params are the first n local values
+        for it in scope.param_list().params() {
+            self.scope_map.insert(
+                it.name().text().into(),
+                ScopeEntry {
+                    kind: scope::ScopeEntryKind::Variable,
+                    is_public: false,
+                },
+            );
+        }
+        self.compile_expr_with_tail(scope.body(), true);
     }
 
     fn scope_scan_let(&mut self, v: LetStmt) {
@@ -330,22 +346,27 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     pub fn compile_block_scope(&mut self, scope: BlockScope) {
+        self.compile_block_scope_with_tail(scope, false);
+    }
+
+    pub fn compile_block_scope_with_tail(&mut self, scope: BlockScope, tail: bool) {
         let mut first = true;
-        for stmt in scope.stmt() {
+        let mut stmts = scope.stmt().peekable();
+        while let Some(stmt) = stmts.next() {
             if first {
                 first = false
             } else {
                 // pop the last result out
                 self.curr_bb().emit(Inst::Pop);
             }
-
-            self.compile_stmt(stmt);
+            let tail = stmts.peek().is_none() && tail;
+            self.compile_stmt(stmt, tail);
         }
     }
 
-    fn compile_stmt(&mut self, stmt: Stmt) {
+    fn compile_stmt(&mut self, stmt: Stmt, tail: bool) {
         match stmt {
-            Stmt::Expr(v) => self.compile_expr_stmt(v),
+            Stmt::Expr(v) => self.compile_expr_stmt(v, tail),
             Stmt::Def(v) => self.compile_def_stmt(v),
             Stmt::Let(v) => self.compile_let_stmt(v),
             Stmt::Use(v) => todo!(),
@@ -353,8 +374,8 @@ impl<'a> FunctionCompileCtx<'a> {
         }
     }
 
-    fn compile_expr_stmt(&mut self, v: ExprStmt) {
-        self.compile_expr(v.expr());
+    fn compile_expr_stmt(&mut self, v: ExprStmt, tail: bool) {
+        self.compile_expr_with_tail(v.expr(), tail);
         // pop the remaining value and call it a day
         self.curr_bb().emit(Inst::Pop);
     }
@@ -427,19 +448,23 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_expr(&mut self, expr: Expr) {
+        self.compile_expr_with_tail(expr, false);
+    }
+
+    fn compile_expr_with_tail(&mut self, expr: Expr, tail: bool) {
         match expr {
             Expr::Binary(v) => self.compile_binary_expr(v),
             Expr::Assign(v) => self.compile_assign_expr(v),
             Expr::Unary(v) => self.compile_unary_expr(v),
             Expr::FunctionCall(v) => self.compile_function_call_expr(v),
             Expr::Ident(v) => self.compile_ident_expr(v),
-            Expr::Paren(v) => self.compile_expr(v.inner()),
+            Expr::Paren(v) => self.compile_expr_with_tail(v.inner(), true),
             Expr::Subscript(v) => self.compile_subscript_expr(v),
             Expr::Dot(v) => self.compile_dot_expr(v),
             Expr::If(v) => self.compile_if_expr(v),
             Expr::While(v) => self.compile_while_loop_expr(v),
             Expr::For(v) => self.compile_for_loop_expr(v),
-            Expr::Block(v) => self.compile_block_expr(v),
+            Expr::Block(v) => self.compile_block_expr(v, true),
             Expr::Literal(v) => self.compile_literal_expr(v),
             Expr::Lambda(v) => self.compile_lambda_expr(v),
             Expr::Tuple(_) => todo!(),
@@ -772,8 +797,8 @@ impl<'a> FunctionCompileCtx<'a> {
         todo!()
     }
 
-    fn compile_block_expr(&mut self, v: BlockExpr) {
-        self.compile_block_scope(v.scope());
+    fn compile_block_expr(&mut self, v: BlockExpr, tail: bool) {
+        self.compile_block_scope_with_tail(v.scope(), tail);
     }
 
     fn compile_literal_expr(&mut self, lit: LiteralExpr) {
@@ -823,7 +848,6 @@ impl<'a> FunctionCompileCtx<'a> {
 }
 
 fn bb_scheduling(bbs: &[BasicBlock]) -> Vec<usize> {
-    use itertools::Itertools;
     use petgraph::graphmap::*;
 
     let mut graph = DiGraphMap::new();
@@ -841,7 +865,7 @@ fn bb_scheduling(bbs: &[BasicBlock]) -> Vec<usize> {
                 graph.add_edge(idx, *t, t_weight);
                 graph.add_edge(idx, *f, f_weight);
             }
-            JumpInst::Unknown | JumpInst::Return | JumpInst::ReturnNil => {}
+            JumpInst::Unknown | JumpInst::Return | JumpInst::TailCall | JumpInst::ReturnNil => {}
         }
     }
 
@@ -916,37 +940,16 @@ fn bb_scheduling(bbs: &[BasicBlock]) -> Vec<usize> {
     result
 }
 
-fn condense_basic_blocks(bbs: Vec<BasicBlock>) -> Vec<u8> {
+fn condense_basic_blocks(bbs: Vec<BasicBlock>) -> (Vec<u8>, Vec<u32>) {
     let bb_seq = bb_scheduling(&bbs);
-    let bb_lengths = bbs.iter().map(|bb| bb.inst.len()).collect::<Vec<_>>();
 
-    // Fusion between basic blocks
-    let fused_bb = bb_seq
-        .iter()
-        .copied()
-        .tuple_windows()
-        .map(|(f, s)| match bbs[f].jmp {
-            JumpInst::Unconditional(t) => {
-                if t == s {
-                    Some(true)
-                } else {
-                    None
-                }
-            }
-            JumpInst::Conditional(t, f, _) => {
-                if t == s {
-                    Some(true)
-                } else if f == s {
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            JumpInst::Unknown | JumpInst::Return | JumpInst::ReturnNil => None,
-        })
-        .collect_vec();
-
-    // We simply assume all jump instructions take their maximum size, i.e. 6 bytes.
+    let mut labels = vec![0; bbs.len()];
+    let mut res = vec![];
+    for (id, bb) in bbs.into_iter().enumerate() {
+        labels[id] = res.len();
+        res.extend_from_slice(&bb.inst);
+        todo!("Emit jump")
+    }
 
     todo!()
 }

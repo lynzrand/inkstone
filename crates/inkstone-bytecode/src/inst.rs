@@ -1,10 +1,12 @@
 mod param;
+mod util;
 
 use bytes::BufMut;
 use enum_ordinalize::Ordinalize;
 
 pub use self::param::IParamType;
 pub use param::ParamType;
+pub use util::*;
 
 macro_rules! define_inst {
     (
