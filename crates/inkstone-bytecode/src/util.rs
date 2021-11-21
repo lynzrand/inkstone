@@ -2,7 +2,20 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
+#[repr(transparent)]
 pub struct ArcByPtr<T: ?Sized>(Arc<T>);
+
+impl<T: ?Sized> From<Arc<T>> for ArcByPtr<T> {
+    fn from(a: Arc<T>) -> Self {
+        Self::new_arc(a)
+    }
+}
+
+impl<T: ?Sized> From<ArcByPtr<T>> for Arc<T> {
+    fn from(val: ArcByPtr<T>) -> Self {
+        val.0
+    }
+}
 
 impl<T: ?Sized> Clone for ArcByPtr<T> {
     fn clone(&self) -> Self {

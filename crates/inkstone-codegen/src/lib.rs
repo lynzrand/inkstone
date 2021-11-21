@@ -17,7 +17,8 @@ pub struct ChunkContext {
 /// Compile the given chunk
 pub fn compile_chunk(chunk: BlockScope, ctx: ChunkContext) {
     let builder = Rc::new(RefCell::new(SymbolListBuilder::new()));
-    let scope = scope::Scope::new(chunk.span().start().into(), scope::ScopeType::Module, None);
+    let scope =
+        scope::ScopeBuilder::new(chunk.span().start().into(), scope::ScopeType::Module, None);
     let mut ctx = FunctionCompileCtx::new(scope, builder.clone());
     ctx.compile_block_scope(chunk);
     let _foo = builder;

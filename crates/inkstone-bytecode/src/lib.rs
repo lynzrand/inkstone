@@ -8,7 +8,7 @@ pub mod util;
 
 #[derive(Debug)]
 pub struct Function {
-    pub name: Option<String>,
+    pub name: Option<SmolStr>,
     pub inst: Vec<u8>,
     pub param_cnt: u32,
     pub binds_self: bool,
@@ -27,5 +27,5 @@ pub enum Constant {
     Float64(u64),
     String(SmolStr),
     Symbol(SmolStr),
-    Closure(ArcByPtr<Function>),
+    FunctionBody(ArcByPtr<Function>),
 }

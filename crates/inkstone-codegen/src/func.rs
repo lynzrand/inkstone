@@ -5,10 +5,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::error::CompileError;
-use crate::scope::{self, LexicalScope, Scope, ScopeEntry, ScopeType, ScopeVariable};
+use crate::scope::{
+    self, LexicalScope, ScopeBuilder, ScopeEntry, ScopeType, ScopeVariable, UpValueCapture,
+    UpValueKind,
+};
 use crate::SymbolListBuilder;
 use fnv::{FnvHashMap, FnvHashSet};
-use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst};
+use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst, InstContainerMut};
 use inkstone_bytecode::{Constant, Function};
 use inkstone_syn::ast::{
     AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope, DotExpr, Expr, ExprStmt,
@@ -77,7 +80,6 @@ enum JumpInst {
     Unconditional(usize),
     Conditional(usize, usize, TopoSortAffinity),
     Return,
-    ReturnNil,
     TailCall,
 }
 
@@ -215,24 +217,37 @@ impl ConstantTableBuilder {
 pub struct FunctionCompileCtx<'a> {
     symbol_list: Rc<RefCell<SymbolListBuilder>>,
     constants: ConstantTableBuilder,
-    scope_map: Scope<'a>,
+    scope: ScopeBuilder<'a>,
     errors: Vec<CompileError>,
 
     basic_blocks: Vec<BasicBlock>,
     curr_bb: usize,
+
     // feature-specific structures
+    name: Option<SmolStr>,
+    param_cnt: u32,
+    binds_self: bool,
+    has_rest_param: bool,
 }
 
 impl<'a> FunctionCompileCtx<'a> {
-    pub fn new(scope: Scope, symbol_list: Rc<RefCell<SymbolListBuilder>>) -> FunctionCompileCtx {
+    pub fn new(
+        scope: ScopeBuilder,
+        symbol_list: Rc<RefCell<SymbolListBuilder>>,
+    ) -> FunctionCompileCtx {
         FunctionCompileCtx {
             symbol_list,
-            scope_map: scope,
+            scope,
             constants: Default::default(),
             errors: vec![],
 
             basic_blocks: vec![BasicBlock::new()],
             curr_bb: 0,
+
+            name: None,
+            param_cnt: 0,
+            binds_self: false,
+            has_rest_param: false,
         }
     }
 
@@ -287,8 +302,10 @@ impl<'a> FunctionCompileCtx<'a> {
 
     pub fn compile_function_scope(&mut self, scope: FuncDef) {
         // ensure the params are the first n local values
+        self.name = Some(scope.name().name().text().into());
         for it in scope.param_list().params() {
-            self.scope_map.insert(
+            self.param_cnt += 1;
+            self.scope.insert(
                 it.name().text().into(),
                 ScopeEntry {
                     kind: scope::ScopeEntryKind::Variable,
@@ -302,7 +319,8 @@ impl<'a> FunctionCompileCtx<'a> {
     pub fn compile_lambda_scope(&mut self, scope: LambdaExpr) {
         // ensure the params are the first n local values
         for it in scope.param_list().params() {
-            self.scope_map.insert(
+            self.param_cnt += 1;
+            self.scope.insert(
                 it.name().text().into(),
                 ScopeEntry {
                     kind: scope::ScopeEntryKind::Variable,
@@ -319,7 +337,7 @@ impl<'a> FunctionCompileCtx<'a> {
             let name = v.binding().name();
             let name = name.as_ref().map(|t| t.text());
             if let Some(t) = name {
-                self.scope_map.insert(
+                self.scope.insert(
                     t.into(),
                     ScopeEntry {
                         kind: scope::ScopeEntryKind::Variable,
@@ -335,7 +353,7 @@ impl<'a> FunctionCompileCtx<'a> {
         if is_public.is_some() {
             let name = def.name().name();
             let name = name.text();
-            self.scope_map.insert(
+            self.scope.insert(
                 name.into(),
                 ScopeEntry {
                     kind: scope::ScopeEntryKind::Function,
@@ -382,27 +400,36 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_def_stmt(&mut self, v: FuncDef) {
         let mut cx = FunctionCompileCtx::new(
-            Scope::new(
+            ScopeBuilder::new(
                 v.node().text_range().start().into(),
                 ScopeType::Function,
-                Some(&self.scope_map),
+                Some(&self.scope),
             ),
             self.symbol_list.clone(),
         );
         cx.compile_function_scope(v);
 
-        let f = Arc::new(cx.finalize());
+        let (f, meta) = cx.finish();
+        let f = Arc::new(f);
 
-        let c_entry = todo!("Add f to constant table");
+        let c_entry = self.constants.insert(Constant::FunctionBody(f.into()));
         self.curr_bb().emit_p(Inst::PushConst, c_entry);
 
-        let captures = [todo!("function's upvalue capture")];
+        let mut captures =
+            vec![ScopeVariable::Local(0); meta.upvalue_capture.upvalue_cnt() as usize];
+        meta.upvalue_capture
+            .captures()
+            .for_each(|(k, v)| captures[v as usize] = k);
         for capture in captures {
-            self.curr_bb().emit_p(Inst::WithUpvalue, capture);
+            match capture {
+                ScopeVariable::Local(slot) => self.curr_bb().emit_p(Inst::WithUpvalue, slot),
+                ScopeVariable::Upvalue(slot) => self.curr_bb().emit_p(Inst::WithUpvalueCopy, slot),
+                ScopeVariable::Module => todo!("Should not occur"),
+            };
         }
 
         self.curr_bb()
-            .emit_p(Inst::ClosureNew, todo!("Capture count"));
+            .emit_p(Inst::ClosureNew, meta.upvalue_capture.upvalue_cnt());
 
         todo!()
     }
@@ -416,7 +443,7 @@ impl<'a> FunctionCompileCtx<'a> {
             let vis = let_stmt.vis();
             let pub_vis = vis.and_then(|v| v.public());
 
-            let local_slot = if pub_vis.is_none() || self.scope_map.get_local(name).is_none() {
+            let local_slot = if pub_vis.is_none() || self.scope.get_local(name).is_none() {
                 // Note:
                 //
                 // If the variable is not public, subsequent values can mask
@@ -425,7 +452,7 @@ impl<'a> FunctionCompileCtx<'a> {
                 // If it's public and at the top-level scope, we would have
                 // already inserted it at the initial scope scan.
 
-                self.scope_map.insert(
+                self.scope.insert(
                     name.into(),
                     ScopeEntry {
                         kind: scope::ScopeEntryKind::Variable,
@@ -616,7 +643,7 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_ident_left_value(&mut self, id: IdentExpr) -> Option<LValue> {
         let name = id.ident();
-        match self.scope_map.get_local_or_add_upvalue(name.text()) {
+        match self.scope.get_local_or_add_upvalue(name.text()) {
             Some(val) => match val {
                 ScopeVariable::Local(slot) => Some(LValue::LocalVariable(slot)),
                 ScopeVariable::Upvalue(slot) => Some(LValue::UpValue(slot)),
@@ -684,7 +711,7 @@ impl<'a> FunctionCompileCtx<'a> {
     /// Compile an identifier expression (RValue).
     fn compile_ident_expr(&mut self, id: IdentExpr) {
         let name = id.ident();
-        match self.scope_map.get_local_or_add_upvalue(name.text()) {
+        match self.scope.get_local_or_add_upvalue(name.text()) {
             Some(ScopeVariable::Local(slot)) => {
                 self.curr_bb().emit_p(Inst::LoadLocal, slot);
             }
@@ -701,7 +728,7 @@ impl<'a> FunctionCompileCtx<'a> {
             None => {
                 self.emit_error(CompileError::new("unknown_ident", id.span()));
                 // error recovery: insert this variable. It is now undefined.
-                self.scope_map.insert(
+                self.scope.insert(
                     name.text().into(),
                     ScopeEntry {
                         kind: scope::ScopeEntryKind::Variable,
@@ -865,7 +892,7 @@ fn bb_scheduling(bbs: &[BasicBlock]) -> Vec<usize> {
                 graph.add_edge(idx, *t, t_weight);
                 graph.add_edge(idx, *f, f_weight);
             }
-            JumpInst::Unknown | JumpInst::Return | JumpInst::TailCall | JumpInst::ReturnNil => {}
+            JumpInst::Unknown | JumpInst::Return | JumpInst::TailCall => {}
         }
     }
 
@@ -945,17 +972,57 @@ fn condense_basic_blocks(bbs: Vec<BasicBlock>) -> (Vec<u8>, Vec<u32>) {
 
     let mut labels = vec![0; bbs.len()];
     let mut res = vec![];
-    for (id, bb) in bbs.into_iter().enumerate() {
-        labels[id] = res.len();
+    for (id, bb) in bb_seq.into_iter().map(|id| (id, &bbs[id])) {
+        labels[id] = res.len() as u32;
         res.extend_from_slice(&bb.inst);
-        todo!("Emit jump")
+        match bb.jmp {
+            JumpInst::Unconditional(t) => {
+                res.emit_p(Inst::Br, t as u32);
+            }
+            JumpInst::Conditional(t, f, _) => {
+                res.emit_p(Inst::BrIfTrue, t as u32)
+                    .emit_p(Inst::Br, f as u32);
+            }
+            JumpInst::Return => {
+                res.emit(Inst::Return);
+            }
+            JumpInst::Unknown => {
+                panic!("Unknown jump instruction in reachable code!");
+            }
+            JumpInst::TailCall => {
+                // no-op because we have already emitted one as the tail call instruction
+            }
+        }
     }
 
-    todo!()
+    (res, labels)
 }
 
 impl FunctionCompileCtx<'_> {
-    pub fn finalize(self) -> Function {
-        todo!()
+    pub fn finish(self) -> (Function, FunctionCompileMetadata) {
+        let (inst, labels) = condense_basic_blocks(self.basic_blocks);
+        let (lexical, upvalue) = self.scope.extract_data();
+        (
+            Function {
+                name: self.name,
+                inst,
+                param_cnt: self.param_cnt,
+                binds_self: self.binds_self,
+                has_rest_param: self.has_rest_param,
+                constants: self.constants.constants,
+                labels,
+                metadata: None,
+            },
+            FunctionCompileMetadata {
+                lexical_scope: lexical,
+                upvalue_capture: upvalue,
+            },
+        )
     }
+}
+
+#[derive(Debug)]
+pub struct FunctionCompileMetadata {
+    pub lexical_scope: LexicalScope,
+    pub upvalue_capture: UpValueCapture,
 }

@@ -18,12 +18,12 @@ pub enum ScopeType {
 /// Additional data of a lexical scope that should own a `Scope` to hold local
 /// variables in itself and its children scopes.
 #[derive(Debug)]
-pub struct Scope<'a> {
+pub struct ScopeBuilder<'a> {
     /// A unique scope ID inside this compilation unit
     id: u32,
     /// Type of this scope
     ty: ScopeType,
-    super_scope: Option<&'a Scope<'a>>,
+    super_scope: Option<&'a ScopeBuilder<'a>>,
     locals: Vec<ScopeEntry>,
     /// List of lexical scopes tied to this scope. The top-level lexical scope will be used
     /// to determine the relation between exported item names and their offsets after the
@@ -41,6 +41,14 @@ pub struct UpValueCapture {
 }
 
 impl UpValueCapture {
+    pub fn captures(&self) -> impl Iterator<Item = (ScopeVariable, u32)> + '_ {
+        self.captures.iter().map(|(k, v)| (*k, *v))
+    }
+
+    pub fn upvalue_cnt(&self) -> u32 {
+        self.upvalue_cnt
+    }
+
     pub fn get(&self, super_slot: &ScopeVariable) -> Option<u32> {
         self.captures.get(super_slot).copied()
     }
@@ -62,9 +70,9 @@ pub enum UpValueKind {
     Copy,
 }
 
-impl<'a> Scope<'a> {
-    pub fn new(id: u32, scope_type: ScopeType, super_scope: Option<&'a Scope<'a>>) -> Self {
-        Scope {
+impl<'a> ScopeBuilder<'a> {
+    pub fn new(id: u32, scope_type: ScopeType, super_scope: Option<&'a ScopeBuilder<'a>>) -> Self {
+        ScopeBuilder {
             id,
             ty: scope_type,
             super_scope,
@@ -163,6 +171,13 @@ impl<'a> Scope<'a> {
         } else {
             None
         }
+    }
+
+    pub fn extract_data(self) -> (LexicalScope, UpValueCapture) {
+        (
+            self.scope_stack.into_iter().next().unwrap(),
+            self.upvalue_capture.into_inner(),
+        )
     }
 }
 
