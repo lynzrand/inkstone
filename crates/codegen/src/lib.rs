@@ -6,7 +6,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use fnv::FnvHashMap;
-use func::FunctionCompileCtx;
+use func::{FunctionCompileCtx, FunctionCompileMetadata};
+use inkstone_bytecode::Function;
 use inkstone_syn::ast::{AstNode, BlockScope};
 use smol_str::SmolStr;
 
@@ -15,13 +16,15 @@ pub struct ChunkContext {
 }
 
 /// Compile the given chunk
-pub fn compile_chunk(chunk: BlockScope, ctx: ChunkContext) {
+pub fn compile_chunk(chunk: BlockScope, ctx: ChunkContext) -> (Function, FunctionCompileMetadata) {
     let builder = Rc::new(RefCell::new(SymbolListBuilder::new()));
     let scope =
         scope::ScopeBuilder::new(chunk.span().start().into(), scope::ScopeType::Module, None);
     let mut ctx = FunctionCompileCtx::new(scope, builder.clone());
     ctx.compile_block_scope(chunk);
-    let _foo = builder;
+    ctx.finish()
+
+    // TODO: create module and stuff
 }
 
 /// Type used to build the symbol list
