@@ -253,5 +253,7 @@ define_inst! {
     Panic                        >> 1,
 
     /// Do nothing.
-    Nop
+    Nop,
+
+    Invalid
 }

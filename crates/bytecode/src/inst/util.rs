@@ -1,13 +1,64 @@
-use bytes::BufMut;
+use bytes::{Buf, BufMut};
 
 use crate::inst::Inst;
 
 use super::{param, IParamType};
 
-pub trait InstContainer {
-    fn seek(&mut self, offset: u32);
-    fn read_u8(&mut self) -> u8;
-    fn read_param<T: param::IParamType>(&mut self) -> T;
+pub trait InstContainer: Buf {
+    /// Move to the specified **absolute** position
+    fn seek(&mut self, position: usize);
+
+    fn read_inst(&mut self) -> Inst {
+        Inst::from_ordinal(self.get_u8()).unwrap_or(Inst::Invalid)
+    }
+
+    fn read_param<P: IParamType>(&mut self) -> P {
+        P::parse(self)
+    }
+
+    fn validate_param<P: IParamType>(&mut self) -> bool {
+        P::validate(self)
+    }
+}
+
+/// A simple instruction reader
+pub struct InstReader<T> {
+    buf: T,
+    offset: usize,
+}
+
+impl<T: AsRef<[u8]>> InstReader<T> {
+    pub fn new(buf: T) -> Self {
+        InstReader { buf, offset: 0 }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn unwrap(self) -> T {
+        self.buf
+    }
+}
+
+impl<T: AsRef<[u8]>> Buf for InstReader<T> {
+    fn remaining(&self) -> usize {
+        self.buf.as_ref().len() - self.offset
+    }
+
+    fn chunk(&self) -> &[u8] {
+        self.buf.as_ref()
+    }
+
+    fn advance(&mut self, cnt: usize) {
+        self.offset += cnt;
+    }
+}
+
+impl<T: AsRef<[u8]>> InstContainer for InstReader<T> {
+    fn seek(&mut self, position: usize) {
+        self.offset = position
+    }
 }
 
 pub trait InstContainerMut {
