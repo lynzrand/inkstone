@@ -19,28 +19,43 @@ pub enum Val {
     Symbol(u64),
 }
 
+impl Val {
+    /// Duplicate the value using runtime
+    pub fn dup(&self) -> Val {
+        todo!()
+    }
+}
+
 pub struct TupleRef {
-    arity: u16,
-    val: *mut Val,
+    pub arity: u16,
+    pub val: *mut Val,
 }
 
 pub struct Array {
-    val: VecDeque<Val>,
+    pub val: VecDeque<Val>,
 }
 
 pub struct Object {
-    proto: Gc<Object>,
-    val: HashMap<u64, Val>,
+    pub proto: Gc<Object>,
+    pub val: HashMap<u64, Val>,
 }
 
 pub struct Closure {
-    func: Gc<Function>,
-    scope: Gc<Scope>,
+    pub func: Gc<Function>,
+    pub scope: Gc<Scope>,
 }
 
 pub struct Scope {
-    parent: Gc<Scope>,
-    val: Vec<Val>,
+    pub parent: Gc<Scope>,
+    pub val: Vec<Val>,
 }
 
-pub struct Function {}
+pub struct Function {
+    pub name: Option<SmolStr>,
+    pub inst: Vec<u8>,
+    pub param_cnt: u32,
+    pub binds_self: bool,
+    pub has_rest_param: bool,
+    pub constants: Vec<Val>,
+    pub labels: Vec<u32>,
+}

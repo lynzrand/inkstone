@@ -232,6 +232,7 @@ version = "0.1.0"
 name = "inkstone-vm"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "inkstone-bytecode",
  "inkstone-util",
  "modular-bitfield",
