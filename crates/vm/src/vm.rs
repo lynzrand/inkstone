@@ -89,18 +89,40 @@ enum InstResult {
     /// Continue on executing the next instruction. Note that `frame.ip` might change when executing
     /// the current instruction.
     Continue,
+
     /// Return the control flow to its caller. The stack top value is used as the return value.
     Return,
+
     /// Tail call another function. `frame.ip` should point at the constant parameter indicating
     /// how many parameters should be popped.
     TailCall,
-    /// Yield the current function with. The stack top value is used as the return value, and the
+
+    /// Yield the current task. The stack top value is used as the return value, and the
     /// resume value should be pushed back to the stack top.
     Yield,
-    Wake,
+
+    /// Panic! Abort the current task, destroying all frames, and reply with an error if other tasks
+    /// ask.
     Panic,
 }
 
+/// Handle a single instruction.
+///
+/// This function is inlined into the handler loop of the parent function.
+///
+/// ---
+///
+/// ## TODO: Add a contex parameter.
+///
+/// The context should at least be able to:
+///
+/// - Allocate/deallocate memory
+/// - Add/wake a task inside event loop
+/// - Call builtin functions
+///
+/// The context should not be able to:
+///
+/// - Modify the current frame (otherwise it will violate Rust's aliasing rules)
 #[inline(always)]
 fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
     use InstResult::*;
@@ -186,7 +208,18 @@ fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
                 div_slow(frame, lhs, rhs)
             }
         }
-        Inst::Rem => todo!(),
+        Inst::Rem => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l.wrapping_rem(r)));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+                frame.push(Val::Float(l % r));
+                Continue
+            } else {
+                todo!("rem slow")
+            }
+        }
         Inst::Pow => todo!(),
         Inst::BitAnd => todo!(),
         Inst::BitOr => todo!(),
@@ -194,9 +227,29 @@ fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
         Inst::Shl => todo!(),
         Inst::Shr => todo!(),
         Inst::ShrL => todo!(),
-        Inst::And => todo!(),
-        Inst::Or => todo!(),
-        Inst::Not => todo!(),
+        Inst::And => {
+            let (lhs, rhs) = frame.pop2();
+            frame.push(Val::Bool(lhs.to_bool() && rhs.to_bool()));
+            Continue
+        }
+        Inst::Or => {
+            let (lhs, rhs) = frame.pop2();
+            frame.push(Val::Bool(lhs.to_bool() || rhs.to_bool()));
+            Continue
+        }
+        Inst::Not => {
+            let lhs = frame.pop();
+            if lhs.is_bool() {
+                frame.push(Val::Bool(!lhs.to_bool()));
+                Continue
+            } else if let Some(i) = lhs.as_int() {
+                // ~i
+                frame.push(Val::Int(!i));
+                Continue
+            } else {
+                todo!("not slow")
+            }
+        }
         Inst::Lt => todo!(),
         Inst::Gt => todo!(),
         Inst::Le => todo!(),
@@ -232,8 +285,14 @@ fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
         Inst::TailCall => todo!(),
         Inst::TailCallMethod => todo!(),
         Inst::Return => todo!(),
-        Inst::Yield => todo!(),
-        Inst::NewTask => todo!(),
+        Inst::Yield => {
+            //
+            Yield
+        }
+        Inst::NewTask => {
+            todo!("create a new task");
+            Continue
+        }
         Inst::PollTask => todo!(),
         Inst::DetachTask => todo!(),
         Inst::Panic => todo!(),

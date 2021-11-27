@@ -39,12 +39,21 @@ impl Val {
         matches!(self, Self::Bool(..))
     }
 
-    pub fn as_bool(&self) -> Option<&bool> {
-        if let Self::Bool(v) = self {
-            Some(v)
-        } else {
-            None
-        }
+    /// Convert this value to boolean.
+    ///
+    /// The only falsy values are:
+    ///
+    /// - `false` (boolean false)
+    /// - `nil` (nil pointer)
+    /// - `0` (Integer zero)
+    /// - `0.0` (Float zero)
+    pub fn to_bool(&self) -> bool {
+        !(
+            // value is false, nil or 0
+            matches!(self, Val::Bool(false) | Val::Nil | Val::Int(0)) 
+            // value is float 0.0
+            || self.as_float().map_or(false, |v| v == 0.0)
+        )
     }
 
     /// Returns `true` if the val is [`Int`].
