@@ -1,23 +1,27 @@
+use std::alloc::Layout;
+use std::borrow::Borrow;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bytes::Buf;
 use inkstone_bytecode::inst::{Inst, InstContainer};
 
+use crate::gc::Gc;
+use crate::task::Task;
 use crate::value::{Function, Val};
 
-struct Frame {
+pub(crate) struct Frame {
     /// The caller of this frame. If the caller is `None`, this frame should signal the completion
     /// of the task it's in when returning.
     caller: Option<NonNull<Frame>>,
     /// The function this frame is tied to.
-    func: Arc<Function>,
+    func: Gc<Function>,
     stack: Vec<Val>,
     ip: usize,
 }
 
 impl Frame {
-    pub fn new(func: Arc<Function>, caller: Option<NonNull<Frame>>) -> Self {
+    pub fn new(func: Gc<Function>, caller: Option<NonNull<Frame>>) -> Self {
         Self {
             caller,
             func,
@@ -47,11 +51,11 @@ impl Frame {
 
     /// Get a reference to the frame's func.
     pub fn func(&self) -> &Function {
-        self.func.as_ref()
+        self.func.borrow()
     }
 
     /// Get a reference to the frame's func.
-    pub fn func_arc(&self) -> &Arc<Function> {
+    pub fn func_pte(&self) -> &Gc<Function> {
         &self.func
     }
 }
@@ -81,17 +85,50 @@ pub struct InkstoneVm {
     active_frame: *mut Frame,
 }
 
-impl InkstoneVm {}
+impl InkstoneVm {
+    fn event_loop(&mut self) {}
+
+    /// The main interpreting loop.
+    ///
+    /// Unlike the similar structure in QuickJS and other interpreters, this loop is **not**
+    /// recursive. Non-builtin function calls break out of this loop and executes as a separate
+    /// action, instead of being called as a subroutine.
+    fn interpret_loop(&mut self) {
+        let action = loop {
+            // We have a unique mutable reference on the frame. This reference will last until the
+            // end of loop.
+            let frame = unsafe { self.active_frame.as_mut().unwrap() };
+            let inst = frame.read_inst();
+            let cx = todo!();
+            let action = exec_inst(inst, frame, cx);
+            if action != InstAction::Continue {
+                break action;
+            }
+        };
+        match action {
+            InstAction::Continue => unreachable!("Continue action will not break the loop"),
+            InstAction::Return => todo!(),
+            InstAction::Call => todo!(),
+            InstAction::TailCall => todo!(),
+            InstAction::Yield => todo!(),
+            InstAction::Panic => todo!(),
+        }
+    }
+}
 
 /// Result after executing an instruction
-#[derive(Debug)]
-enum InstResult {
+#[derive(Debug, PartialEq, Eq)]
+enum InstAction {
     /// Continue on executing the next instruction. Note that `frame.ip` might change when executing
     /// the current instruction.
     Continue,
 
     /// Return the control flow to its caller. The stack top value is used as the return value.
     Return,
+
+    /// Call another function. `frame.ip` should point at the constant parameter indicating
+    /// how many parameters should be popped.
+    Call,
 
     /// Tail call another function. `frame.ip` should point at the constant parameter indicating
     /// how many parameters should be popped.
@@ -104,6 +141,26 @@ enum InstResult {
     /// Panic! Abort the current task, destroying all frames, and reply with an error if other tasks
     /// ask.
     Panic,
+}
+
+struct InstExecCtx {}
+
+impl InstExecCtx {
+    fn alloc_mem(layout: Layout) {
+        todo!("Allocate memory")
+    }
+
+    fn create_task(task: Gc<Task>) {
+        todo!("create task")
+    }
+
+    fn wake_task(task: Gc<Task>) {
+        todo!("wake task")
+    }
+
+    fn call_builtin(f: &str) {
+        todo!("call builtin function")
+    }
 }
 
 /// Handle a single instruction.
@@ -124,8 +181,8 @@ enum InstResult {
 ///
 /// - Modify the current frame (otherwise it will violate Rust's aliasing rules)
 #[inline(always)]
-fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
-    use InstResult::*;
+fn exec_inst(inst: Inst, frame: &mut Frame, cx: &mut InstExecCtx) -> InstAction {
+    use InstAction::*;
     match inst {
         Inst::Pop => {
             let _ = frame.pop();
@@ -301,18 +358,18 @@ fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
     }
 }
 
-fn add_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+fn add_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstAction {
     todo!()
 }
 
-fn sub_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+fn sub_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstAction {
     todo!()
 }
 
-fn mul_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+fn mul_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstAction {
     todo!()
 }
 
-fn div_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+fn div_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstAction {
     todo!()
 }
