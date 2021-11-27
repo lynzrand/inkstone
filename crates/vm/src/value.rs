@@ -24,6 +24,165 @@ impl Val {
     pub fn dup(&self) -> Val {
         todo!()
     }
+
+    /// Returns `true` if the val is [`Nil`].
+    ///
+    /// [`Nil`]: Val::Nil
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Self::Nil)
+    }
+
+    /// Returns `true` if the val is [`Bool`].
+    ///
+    /// [`Bool`]: Val::Bool
+    pub fn is_bool(&self) -> bool {
+        matches!(self, Self::Bool(..))
+    }
+
+    pub fn as_bool(&self) -> Option<&bool> {
+        if let Self::Bool(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Int`].
+    ///
+    /// [`Int`]: Val::Int
+    pub fn is_int(&self) -> bool {
+        matches!(self, Self::Int(..))
+    }
+
+    pub fn as_int(&self) -> Option<i64> {
+        if let Self::Int(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Float`].
+    ///
+    /// [`Float`]: Val::Float
+    pub fn is_float(&self) -> bool {
+        matches!(self, Self::Float(..))
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        if let Self::Int(i) = self {
+            Some(*i as f64)
+        } else if let Self::Float(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`String`].
+    ///
+    /// [`String`]: Val::String
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String(..))
+    }
+
+    pub fn as_string(&self) -> Option<&Gc<String>> {
+        if let Self::String(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Tuple`].
+    ///
+    /// [`Tuple`]: Val::Tuple
+    pub fn is_tuple(&self) -> bool {
+        matches!(self, Self::Tuple(..))
+    }
+
+    pub fn as_tuple(&self) -> Option<&TupleRef> {
+        if let Self::Tuple(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Array`].
+    ///
+    /// [`Array`]: Val::Array
+    pub fn is_array(&self) -> bool {
+        matches!(self, Self::Array(..))
+    }
+
+    pub fn as_array(&self) -> Option<&Gc<Array>> {
+        if let Self::Array(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Object`].
+    ///
+    /// [`Object`]: Val::Object
+    pub fn is_object(&self) -> bool {
+        matches!(self, Self::Object(..))
+    }
+
+    pub fn as_object(&self) -> Option<&Gc<Object>> {
+        if let Self::Object(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Scope`].
+    ///
+    /// [`Scope`]: Val::Scope
+    pub fn is_scope(&self) -> bool {
+        matches!(self, Self::Scope(..))
+    }
+
+    pub fn as_scope(&self) -> Option<&Gc<Scope>> {
+        if let Self::Scope(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Closure`].
+    ///
+    /// [`Closure`]: Val::Closure
+    pub fn is_closure(&self) -> bool {
+        matches!(self, Self::Closure(..))
+    }
+
+    pub fn as_closure(&self) -> Option<&Gc<Closure>> {
+        if let Self::Closure(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the val is [`Symbol`].
+    ///
+    /// [`Symbol`]: Val::Symbol
+    pub fn is_symbol(&self) -> bool {
+        matches!(self, Self::Symbol(..))
+    }
+
+    pub fn as_symbol(&self) -> Option<u64> {
+        if let Self::Symbol(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct TupleRef {

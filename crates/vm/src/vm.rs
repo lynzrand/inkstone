@@ -1,3 +1,4 @@
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bytes::Buf;
@@ -6,14 +7,19 @@ use inkstone_bytecode::inst::{Inst, InstContainer};
 use crate::value::{Function, Val};
 
 struct Frame {
+    /// The caller of this frame. If the caller is `None`, this frame should signal the completion
+    /// of the task it's in when returning.
+    caller: Option<NonNull<Frame>>,
+    /// The function this frame is tied to.
     func: Arc<Function>,
     stack: Vec<Val>,
     ip: usize,
 }
 
 impl Frame {
-    pub fn new(func: Arc<Function>) -> Self {
+    pub fn new(func: Arc<Function>, caller: Option<NonNull<Frame>>) -> Self {
         Self {
+            caller,
             func,
             stack: vec![],
             ip: 0,
@@ -70,20 +76,32 @@ impl InstContainer for Frame {
     }
 }
 
-pub struct InkstoneVm {}
+pub struct InkstoneVm {
+    /// The current active frame.
+    active_frame: *mut Frame,
+}
 
 impl InkstoneVm {}
 
 /// Result after executing an instruction
 #[derive(Debug)]
 enum InstResult {
+    /// Continue on executing the next instruction. Note that `frame.ip` might change when executing
+    /// the current instruction.
     Continue,
+    /// Return the control flow to its caller. The stack top value is used as the return value.
     Return,
+    /// Tail call another function. `frame.ip` should point at the constant parameter indicating
+    /// how many parameters should be popped.
+    TailCall,
+    /// Yield the current function with. The stack top value is used as the return value, and the
+    /// resume value should be pushed back to the stack top.
     Yield,
     Wake,
     Panic,
 }
 
+#[inline(always)]
 fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
     use InstResult::*;
     match inst {
@@ -120,10 +138,54 @@ fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
             frame.push(Val::Nil);
             Continue
         }
-        Inst::Add => todo!(),
-        Inst::Sub => todo!(),
-        Inst::Mul => todo!(),
-        Inst::Div => todo!(),
+        Inst::Add => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l.wrapping_add(r)));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+                frame.push(Val::Float(l + r));
+                Continue
+            } else {
+                add_slow(frame, lhs, rhs)
+            }
+        }
+        Inst::Sub => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l.wrapping_sub(r)));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+                frame.push(Val::Float(l - r));
+                Continue
+            } else {
+                sub_slow(frame, lhs, rhs)
+            }
+        }
+        Inst::Mul => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l.wrapping_mul(r)));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+                frame.push(Val::Float(l * r));
+                Continue
+            } else {
+                mul_slow(frame, lhs, rhs)
+            }
+        }
+        Inst::Div => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l.wrapping_div(r)));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+                frame.push(Val::Float(l / r));
+                Continue
+            } else {
+                div_slow(frame, lhs, rhs)
+            }
+        }
         Inst::Rem => todo!(),
         Inst::Pow => todo!(),
         Inst::BitAnd => todo!(),
@@ -178,4 +240,20 @@ fn exec_inst(inst: Inst, frame: &mut Frame) -> InstResult {
         Inst::Nop => todo!(),
         Inst::Invalid => todo!(),
     }
+}
+
+fn add_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+    todo!()
+}
+
+fn sub_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+    todo!()
+}
+
+fn mul_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+    todo!()
+}
+
+fn div_slow(frame: &mut Frame, lhs: Val, rhs: Val) -> InstResult {
+    todo!()
 }
