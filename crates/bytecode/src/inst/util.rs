@@ -1,3 +1,5 @@
+use std::fmt::{Debug, DebugList, Display};
+
 use bytes::{Buf, BufMut};
 
 use crate::inst::Inst;
@@ -47,7 +49,7 @@ impl<T: AsRef<[u8]>> Buf for InstReader<T> {
     }
 
     fn chunk(&self) -> &[u8] {
-        self.buf.as_ref()
+        &self.buf.as_ref()[self.offset..]
     }
 
     fn advance(&mut self, cnt: usize) {
@@ -58,6 +60,35 @@ impl<T: AsRef<[u8]>> Buf for InstReader<T> {
 impl<T: AsRef<[u8]>> InstContainer for InstReader<T> {
     fn seek(&mut self, position: usize) {
         self.offset = position
+    }
+}
+
+pub struct InstContainerFormatter<'a>(pub &'a [u8]);
+
+impl<'a> InstContainerFormatter<'a> {
+    fn fmt_inner(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut container = InstReader::new(self.0);
+        while container.remaining() > 0 {
+            let inst = container.read_inst();
+            f.write_str("    ")?;
+            inst.fmt_with_param(&mut container, f)?;
+            f.write_str("\n")?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Display for InstContainerFormatter<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "[")?;
+        self.fmt_inner(f)?;
+        write!(f, "]")
+    }
+}
+
+impl<'a> Debug for InstContainerFormatter<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self, f)
     }
 }
 

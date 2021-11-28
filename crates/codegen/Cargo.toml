@@ -15,3 +15,11 @@ fnv = "1"
 vec1 = "1.8"
 petgraph = "0.6"
 itertools = "0.10"
+tracing = "0.1.28"
+
+
+[dev-dependencies]
+test-env-log = { version = "0.2.7", features = [
+    "trace",
+], default-features = false }
+tracing-subscriber = "0.2.24"

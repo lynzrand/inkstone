@@ -4,8 +4,9 @@ mod util;
 use bytes::BufMut;
 use enum_ordinalize::Ordinalize;
 
-pub use self::param::IParamType;
-pub use param::ParamType;
+pub use param::{Cnt, ConstIdx, Idx, Int, Label, Reg, UpReg};
+pub use param::{IParamType, ParamType};
+
 pub use util::*;
 
 macro_rules! define_inst {
@@ -38,7 +39,7 @@ macro_rules! define_inst {
         ),*}
 
         impl $type {
-            /// Returns the count of parameters of this instruction
+            /// Returns the type of parameters of this instruction
             pub fn param_type(self) -> Option<ParamType> {
                 #[allow(path_statements)]
                 match self {$(
@@ -65,6 +66,22 @@ macro_rules! define_inst {
                         0
                         $(; $push_cnt)?
                     }
+                ),*}
+            }
+
+            #[allow(unused)]
+            pub fn fmt_with_param(
+                &self,
+                container: &mut impl InstContainer,
+                f: &mut ::std::fmt::Formatter<'_>
+            ) -> std::fmt::Result {
+                ::std::fmt::Display::fmt(self, f)?;
+                match self {$(
+                    Self::$name => {
+                        Ok::<_, std::fmt::Error>(()) $(;
+                        let param = container.read_param::<$param>();
+                        write!(f, " {}", param)
+                    )?}
                 ),*}
             }
         }
@@ -208,16 +225,41 @@ define_inst! {
 
 
     // function
-    /// Calls the function using the given arguments
+    /// Call a function. The argument stack contains first the function (closure), and then the
+    /// `n_args` arguments to be passed into the function.
+    ///
+    /// The stack before and after call looks like this:
+    ///
+    /// ```plaintext
+    /// (stack bottom) ..., func, arg0, arg1, ..., argN (stack top)
+    ///                    |-----> These values are popped
+    ///                    |<-- This value is pushed
+    /// (stack bottom) ..., result (stack top)
+    /// ```
     Call(n_args: Cnt)            >> 1     << 1,
-    /// Calls the function using the given arguments, with `self` bound to the
-    /// 1st argument if possible.
-    CallMethod(n_args: Cnt)      >> 1     << 1,
-    /// Return this function call with the result of the function using the given arguments
+    /// Call a function. The argument stack contains first the receiver object, then the method
+    /// name, and then the `n_args` arguments to be passed into the function.
+    ///
+    /// If `receiver[method_name]` refers to a function that **binds `self` and is in the prototype
+    /// of `receiver`**, then `receiver` binds to the `self` parameter of the called function.
+    /// Otherwise, `receiver` will be dropped and the other parameters will be passed as-is.
+    ///
+    /// The stack before and after call looks like this:
+    ///
+    /// ```plaintext
+    /// (stack bottom) ..., receiver, method_name, arg0, arg1, ..., argN (stack top)
+    ///                    |-----> These values are popped
+    ///                    |<-- This value is pushed
+    /// (stack bottom) ..., result (stack top)
+    /// ```
+    CallMethod(n_args: Cnt)      >> 2     << 1,
+    /// Return this function call with the result of the function using the given arguments. See
+    /// [`Call`] for semantics of this instruction.
     TailCall(n_args: Cnt)        >> 1,
     /// Return this function call with the result of the function using the given arguments
-    /// with `self` bound to the 1st argument if possible
-    TailCallMethod(n_args: Cnt)  >> 1,
+    /// with `self` bound to the 1st argument if possible. See [`CallMethod`] for the semantics
+    /// of this instruction.
+    TailCallMethod(n_args: Cnt)  >> 2,
 
     /// Return the current function
     Return                       >> 1,

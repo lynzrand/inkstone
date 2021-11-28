@@ -185,6 +185,10 @@ macro_rules! param_types {
             $name
         ),*}
 
+        $(
+            pub type $name = $ty;
+        )*
+
         impl $ty_name {
             pub fn validate(self, buf: impl Buf) -> bool {
                 match self {$(
@@ -196,34 +200,6 @@ macro_rules! param_types {
 }
 
 const U32_MAX_RESERVE_LEN: usize = 5;
-
-/// Represents a local register
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Reg(u32);
-
-impl Display for Reg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "r{}", self.0)
-    }
-}
-
-impl IParamType for Reg {
-    const PARAM_ENUM_TY: ParamType = ParamType::Reg;
-
-    const MAX_RESERVE_LEN: usize = 5;
-
-    fn validate(r: impl Buf) -> bool {
-        validate_u32(r)
-    }
-
-    fn parse(r: impl Buf) -> Self {
-        Reg(read_u32(r))
-    }
-
-    fn write(&self, w: impl BufMut) {
-        write_u32(self.0, w)
-    }
-}
 
 /// Represents an index of constant table
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

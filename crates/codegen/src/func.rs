@@ -16,7 +16,7 @@ use inkstone_bytecode::{Constant, Function};
 use inkstone_syn::ast::{
     AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope, DotExpr, Expr, ExprStmt,
     ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
-    Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
+    ReturnExpr, Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
 };
 use inkstone_syn::parse::tag_util;
 use itertools::Itertools;
@@ -297,7 +297,8 @@ impl<'a> FunctionCompileCtx<'a> {
             }
         }
 
-        self.compile_block_scope(scope)
+        self.compile_block_scope_with_tail(scope, true);
+        self.curr_bb().set_jmp(JumpInst::Return);
     }
 
     pub fn compile_function_scope(&mut self, scope: FuncDef) {
@@ -314,6 +315,7 @@ impl<'a> FunctionCompileCtx<'a> {
             );
         }
         self.compile_expr_with_tail(scope.body(), true);
+        self.curr_bb().set_jmp(JumpInst::Return);
     }
 
     pub fn compile_lambda_scope(&mut self, scope: LambdaExpr) {
@@ -329,6 +331,7 @@ impl<'a> FunctionCompileCtx<'a> {
             );
         }
         self.compile_expr_with_tail(scope.body(), true);
+        self.curr_bb().set_jmp(JumpInst::Return);
     }
 
     fn scope_scan_let(&mut self, v: LetStmt) {
@@ -395,7 +398,9 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_expr_stmt(&mut self, v: ExprStmt, tail: bool) {
         self.compile_expr_with_tail(v.expr(), tail);
         // pop the remaining value and call it a day
-        self.curr_bb().emit(Inst::Pop);
+        if !tail {
+            self.curr_bb().emit(Inst::Pop);
+        }
     }
 
     fn compile_def_stmt(&mut self, v: FuncDef) {
@@ -483,21 +488,21 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Binary(v) => self.compile_binary_expr(v),
             Expr::Assign(v) => self.compile_assign_expr(v),
             Expr::Unary(v) => self.compile_unary_expr(v),
-            Expr::FunctionCall(v) => self.compile_function_call_expr(v),
+            Expr::FunctionCall(v) => self.compile_function_call_expr(v, tail),
             Expr::Ident(v) => self.compile_ident_expr(v),
-            Expr::Paren(v) => self.compile_expr_with_tail(v.inner(), true),
+            Expr::Paren(v) => self.compile_expr_with_tail(v.inner(), tail),
             Expr::Subscript(v) => self.compile_subscript_expr(v),
             Expr::Dot(v) => self.compile_dot_expr(v),
             Expr::If(v) => self.compile_if_expr(v),
             Expr::While(v) => self.compile_while_loop_expr(v),
             Expr::For(v) => self.compile_for_loop_expr(v),
-            Expr::Block(v) => self.compile_block_expr(v, true),
+            Expr::Block(v) => self.compile_block_expr(v, tail),
             Expr::Literal(v) => self.compile_literal_expr(v),
             Expr::Lambda(v) => self.compile_lambda_expr(v),
             Expr::Tuple(_) => todo!(),
             Expr::Array(_) => todo!(),
             Expr::Object(_) => todo!(),
-            Expr::Return(_) => todo!(),
+            Expr::Return(v) => self.compile_return_expr(v),
             Expr::Break(_) => todo!(),
             Expr::Continue(_) => todo!(),
         }
@@ -691,7 +696,7 @@ impl<'a> FunctionCompileCtx<'a> {
         }
     }
 
-    fn compile_function_call_expr(&mut self, v: FunctionCallExpr) {
+    fn compile_function_call_expr(&mut self, v: FunctionCallExpr, tail: bool) {
         let expr = v.func();
         self.compile_expr(expr.clone());
 
@@ -872,6 +877,17 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_lambda_expr(&mut self, v: LambdaExpr) {
         todo!()
     }
+
+    fn compile_return_expr(&mut self, v: ReturnExpr) {
+        if let Some(expr) = v.expr() {
+            self.compile_expr_with_tail(expr, true);
+            self.curr_bb().set_jmp(JumpInst::Return);
+        } else {
+            self.curr_bb().emit(Inst::PushNil).set_jmp(JumpInst::Return);
+        }
+        let new_bb = self.new_bb();
+        self.set_curr_bb(new_bb);
+    }
 }
 
 fn bb_scheduling(bbs: &[BasicBlock]) -> Vec<usize> {
@@ -987,7 +1003,10 @@ fn condense_basic_blocks(bbs: Vec<BasicBlock>) -> (Vec<u8>, Vec<u32>) {
                 res.emit(Inst::Return);
             }
             JumpInst::Unknown => {
-                panic!("Unknown jump instruction in reachable code!");
+                panic!(
+                    "Unknown jump instruction in reachable code! At: bb {}\n\n{:?}",
+                    id, bbs
+                );
             }
             JumpInst::TailCall => {
                 // no-op because we have already emitted one as the tail call instruction

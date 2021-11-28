@@ -12,6 +12,8 @@ rowan = "0.14.1"
 scopeguard = "1.1"
 tracing = "0.1.28"
 
+backtrace = { version = "0.3", optional = true }
+
 [dev-dependencies]
 pretty_assertions = "1"
 colored-diff = "0.2.2"
@@ -20,3 +22,6 @@ test-env-log = { version = "0.2.7", features = [
     "trace",
 ], default-features = false }
 tracing-subscriber = "0.2.24"
+
+[features]
+default = ["backtrace"]

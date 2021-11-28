@@ -115,6 +115,41 @@ pub struct Parser<'src> {
     debug_node_tree: Vec<SynTag>,
 }
 
+macro_rules! backtrace_caller {
+    ($func_id:ident, $file_id:ident, $line_id:ident) => {
+        #[cfg(feature = "backtrace")]
+        let ($func_id, $file_id, $line_id) = {
+            let mut level = 0;
+            let mut file = None;
+            let mut line = None;
+            let mut func = None;
+            backtrace::trace(|f| {
+                if level == 4 {
+                    backtrace::resolve_frame(f, |f| {
+                        file = f.filename().map(|f| f.to_owned());
+                        line = f.lineno();
+                        func = f.name().map(|s| s.to_string());
+                    });
+                    false
+                } else {
+                    level += 1;
+                    true
+                }
+            });
+            (
+                func.unwrap_or_default(),
+                file.unwrap_or_default(),
+                line.unwrap_or_default(),
+            )
+        };
+        #[cfg(feature = "backtrace")]
+        let $file_id = $file_id.display();
+
+        #[cfg(not(feature = "backtrace"))]
+        let ($func_id, $file_id, $line_id) = ("", "<unknown>", "");
+    };
+}
+
 impl<'src> Parser<'src> {
     pub fn new(s: &'src str) -> Self {
         Parser {
@@ -138,7 +173,14 @@ impl<'src> Parser<'src> {
     fn start_node(&mut self, tag: SynTag) {
         #[cfg(debug_assertions)]
         {
-            tracing::debug!("> Start node.  {:?} ++ {:?}", self.debug_node_tree, tag);
+            backtrace_caller!(func, file, line);
+
+            tracing::debug!(
+                "> Start node.  {:?} ++ {:?}{}",
+                self.debug_node_tree,
+                tag,
+                format_args!("; {} ({}:{})", func, file, line)
+            );
             self.debug_node_tree.push(tag);
         }
         self.b.start_node(tag.into());
@@ -147,11 +189,14 @@ impl<'src> Parser<'src> {
     fn start_node_at(&mut self, checkpoint: Checkpoint, tag: SynTag) {
         #[cfg(debug_assertions)]
         {
+            backtrace_caller!(func, file, line);
+
             tracing::debug!(
-                "> Start node.  {:?} ++ {:?} <: {:?}",
+                "> Start node.  {:?} ++ {:?} <: {:?}{}",
                 self.debug_node_tree,
                 tag,
-                checkpoint
+                checkpoint,
+                format_args!("; {} ({}:{})", func, file, line)
             );
             self.debug_node_tree.push(tag);
         }
@@ -161,8 +206,15 @@ impl<'src> Parser<'src> {
     fn finish_node(&mut self) {
         #[cfg(debug_assertions)]
         {
+            backtrace_caller!(func, file, line);
+
             let tag = self.debug_node_tree.pop();
-            tracing::debug!("< Finish node. {:?} :: {:?}", self.debug_node_tree, tag,);
+            tracing::debug!(
+                "< Finish node. {:?} :: {:?}{}",
+                self.debug_node_tree,
+                tag,
+                format_args!("; {} ({}:{})", func, file, line)
+            );
         }
         self.b.finish_node();
     }
@@ -390,8 +442,8 @@ impl<'src> Parser<'src> {
             self.start_node(SynTag::Pub);
             self.eat();
             self.finish_node();
+            self.finish_node();
         }
-        self.finish_node();
     }
 
     fn parse_stmt_with_optional_visibility(&mut self) {
