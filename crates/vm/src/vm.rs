@@ -6,9 +6,10 @@ use std::sync::Arc;
 use bytes::Buf;
 use inkstone_bytecode::inst::{Inst, InstContainer};
 
-use crate::gc::Gc;
+use crate::gc::alloc::GcAllocator;
+use crate::gc::{Gc, RawGcPtr};
 use crate::task::Task;
-use crate::value::{Function, Val};
+use crate::value::{Function, TupleHeader, Val};
 
 pub(crate) struct Frame {
     /// The caller of this frame. If the caller is `None`, this frame should signal the completion
@@ -83,6 +84,7 @@ impl InstContainer for Frame {
 pub struct InkstoneVm {
     /// The current active frame.
     active_frame: *mut Frame,
+    allocator: GcAllocator,
 }
 
 impl InkstoneVm {
@@ -99,7 +101,9 @@ impl InkstoneVm {
             // end of loop.
             let frame = unsafe { self.active_frame.as_mut().unwrap() };
             let inst = frame.read_inst();
-            let cx = todo!();
+            let cx = InstExecCtx {
+                alloc: &mut self.allocator,
+            };
             let action = exec_inst(inst, frame, cx);
             if action != InstAction::Continue {
                 break action;
@@ -110,6 +114,8 @@ impl InkstoneVm {
             InstAction::Return => todo!(),
             InstAction::Call => todo!(),
             InstAction::TailCall => todo!(),
+            InstAction::CallMethod => todo!(),
+            InstAction::TailCallMethod => todo!(),
             InstAction::Yield => todo!(),
             InstAction::Panic => todo!(),
         }
@@ -134,6 +140,14 @@ enum InstAction {
     /// how many parameters should be popped.
     TailCall,
 
+    /// Call another function with a receiver. `frame.ip` should point at the constant parameter
+    /// indicating how many parameters should be popped.
+    CallMethod,
+
+    /// Tail call another function with a receiver. `frame.ip` should point at the constant
+    /// parameter indicating how many parameters should be popped.
+    TailCallMethod,
+
     /// Yield the current task. The stack top value is used as the return value, and the
     /// resume value should be pushed back to the stack top.
     Yield,
@@ -143,23 +157,44 @@ enum InstAction {
     Panic,
 }
 
-struct InstExecCtx {}
+struct InstExecCtx<'r> {
+    alloc: &'r mut GcAllocator,
+}
 
-impl InstExecCtx {
-    fn alloc_mem(layout: Layout) {
-        todo!("Allocate memory")
+impl<'r> InstExecCtx<'r> {
+    unsafe fn alloc_mem(
+        &mut self,
+        layout: Layout,
+        vtable: *const crate::gc::TraceVTable,
+    ) -> Option<crate::gc::RawGcPtr> {
+        self.alloc.alloc_raw(layout, vtable)
     }
 
-    fn create_task(task: Gc<Task>) {
+    fn create_task(&mut self, task: Gc<Task>) {
         todo!("create task")
     }
 
-    fn wake_task(task: Gc<Task>) {
+    fn wake_task(&mut self, task: Gc<Task>) {
         todo!("wake task")
     }
 
-    fn call_builtin(f: &str) {
+    fn detach_task(&mut self, task: Gc<Task>) {
+        todo!("detach task")
+    }
+
+    fn call_builtin(&mut self, f: &str) {
         todo!("call builtin function")
+    }
+}
+
+impl GcAllocator {
+    pub fn alloc_tuple(&mut self, arity: usize) -> Option<RawGcPtr> {
+        let vtable = todo!();
+        let (layout, _) = Layout::new::<TupleHeader>()
+            .pad_to_align()
+            .extend(Layout::array::<Val>(arity).expect("Failed to compute tuple layout"))
+            .expect("Failed to compute tuple layout");
+        unsafe { self.alloc_raw(layout, vtable) }
     }
 }
 
@@ -181,7 +216,7 @@ impl InstExecCtx {
 ///
 /// - Modify the current frame (otherwise it will violate Rust's aliasing rules)
 #[inline(always)]
-fn exec_inst(inst: Inst, frame: &mut Frame, cx: &mut InstExecCtx) -> InstAction {
+fn exec_inst(inst: Inst, frame: &mut Frame, cx: InstExecCtx<'_>) -> InstAction {
     use InstAction::*;
     match inst {
         Inst::Pop => {
@@ -313,7 +348,13 @@ fn exec_inst(inst: Inst, frame: &mut Frame, cx: &mut InstExecCtx) -> InstAction 
         Inst::Ge => todo!(),
         Inst::Eq => todo!(),
         Inst::Ne => todo!(),
-        Inst::TupleNew => todo!(),
+        Inst::TupleNew => {
+            let cnt = frame.read_param::<u32>();
+            let mut stack = frame.stack_mut();
+            let len = stack.len();
+            todo!();
+            Continue
+        }
         Inst::ArrayNew => todo!(),
         Inst::ClosureNew => todo!(),
         Inst::MapNew => todo!(),
@@ -337,15 +378,12 @@ fn exec_inst(inst: Inst, frame: &mut Frame, cx: &mut InstExecCtx) -> InstAction 
         Inst::Br => todo!(),
         Inst::BrIfTrue => todo!(),
         Inst::BrIfFalse => todo!(),
-        Inst::Call => todo!(),
-        Inst::CallMethod => todo!(),
-        Inst::TailCall => todo!(),
-        Inst::TailCallMethod => todo!(),
-        Inst::Return => todo!(),
-        Inst::Yield => {
-            //
-            Yield
-        }
+        Inst::Call => Call,
+        Inst::CallMethod => CallMethod,
+        Inst::TailCall => TailCall,
+        Inst::TailCallMethod => TailCallMethod,
+        Inst::Return => Return,
+        Inst::Yield => Yield,
         Inst::NewTask => {
             todo!("create a new task");
             Continue

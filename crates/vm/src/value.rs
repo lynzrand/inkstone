@@ -1,9 +1,12 @@
+use std::alloc::Layout;
 use std::collections::{HashMap, VecDeque};
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use smol_str::SmolStr;
 
-use crate::gc::Gc;
+use crate::gc::alloc::GcAllocator;
+use crate::gc::{Gc, RawGcPtr};
 
 pub enum Val {
     Nil,
@@ -11,7 +14,7 @@ pub enum Val {
     Int(i64),
     Float(f64),
     String(Gc<String>),
-    Tuple(TupleRef),
+    Tuple(Gc<TupleHeader>),
     Array(Gc<Array>),
     Object(Gc<Object>),
     Scope(Gc<Scope>),
@@ -50,7 +53,7 @@ impl Val {
     pub fn to_bool(&self) -> bool {
         !(
             // value is false, nil or 0
-            matches!(self, Val::Bool(false) | Val::Nil | Val::Int(0)) 
+            matches!(self, Val::Bool(false) | Val::Nil | Val::Int(0))
             // value is float 0.0
             || self.as_float().map_or(false, |v| v == 0.0)
         )
@@ -108,14 +111,6 @@ impl Val {
     /// [`Tuple`]: Val::Tuple
     pub fn is_tuple(&self) -> bool {
         matches!(self, Self::Tuple(..))
-    }
-
-    pub fn as_tuple(&self) -> Option<&TupleRef> {
-        if let Self::Tuple(v) = self {
-            Some(v)
-        } else {
-            None
-        }
     }
 
     /// Returns `true` if the val is [`Array`].
@@ -195,8 +190,48 @@ impl Val {
 }
 
 pub struct TupleRef {
+    ptr: RawGcPtr,
+}
+
+impl TupleRef {
+    pub fn header(&self) -> &TupleHeader {
+        unsafe { self.ptr.value().cast().as_ref() }
+    }
+
+    pub fn values(&self) -> &[Val] {
+        let arity = self.header().arity;
+        unsafe {
+            let val_start = self
+                .ptr
+                .value()
+                .as_ptr()
+                .add(std::mem::size_of::<TupleHeader>());
+            let val_start = val_start as *mut Val;
+            std::slice::from_raw_parts(val_start, arity as usize)
+        }
+    }
+
+    pub fn values_mut(&mut self) -> &mut [Val] {
+        let arity = self.header().arity;
+        unsafe {
+            let val_start = self
+                .ptr
+                .value()
+                .as_ptr()
+                .add(std::mem::size_of::<TupleHeader>());
+            let val_start = val_start as *mut Val;
+            std::slice::from_raw_parts_mut(val_start, arity as usize)
+        }
+    }
+
+    pub fn raw_ptr(&self) -> &RawGcPtr {
+        &self.ptr
+    }
+}
+
+pub struct TupleHeader {
     pub arity: u16,
-    pub val: *mut Val,
+    pub val: [Val; 0],
 }
 
 pub struct Array {

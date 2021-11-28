@@ -20,8 +20,10 @@ impl Trace for SimpleTestStruct {
     }
 }
 
-#[allow(non_upper_case_globals)]
-TraceVTable_static!(static SimpleTestStruct_TraceVtable for SimpleTestStruct);
+TraceVTable_static! {
+    #[allow(non_upper_case_globals)]
+    static SimpleTestStruct_TraceVtable for SimpleTestStruct
+}
 
 #[test]
 fn test_basic_alloc() {
