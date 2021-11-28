@@ -9,6 +9,8 @@ fn test_compile() {
         r"
 let i = 1 + 1
 let bar = 1 * i + 4
+def foo x y z = x + y + z + i
+let baz = \x y -> \z -> x + y + z
 i
     ",
     );

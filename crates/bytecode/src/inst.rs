@@ -80,7 +80,7 @@ macro_rules! define_inst {
                     Self::$name => {
                         Ok::<_, std::fmt::Error>(()) $(;
                         let param = container.read_param::<$param>();
-                        write!(f, " {}", param)
+                        write!(f, " {}={}", stringify!($param_name), param)
                     )?}
                 ),*}
             }
@@ -126,7 +126,7 @@ define_inst! {
     /// Push a 32-bit integer constant
     PushI32(num: Int)                     << 1,
     /// Push a value inside the constant table
-    PushConst(idx: ConstIdx)                   << 1,
+    PushConst(idx: ConstIdx)              << 1,
     /// Push boolean true
     PushTrue                              << 1,
     /// Push boolean false
@@ -169,7 +169,7 @@ define_inst! {
     /// Creates a new array. Pops additional `len` items into the array.
     ArrayNew(len: Cnt)                    << 1,
     /// Creates a new closure using the stack top. Pops `[function, scope]`.
-    ClosureNew                   >> 2     << 1,
+    ClosureNew(upvalue_cnt: Cnt) >> 2     << 1,
     /// Creates a new map.
     MapNew                                << 1,
     /// Set the prototype of the object at stack top
@@ -199,15 +199,15 @@ define_inst! {
     UpValueScopeNew(len: Cnt)             << 1,
     /// Create a new upvalue, referencing the given slot in the local register. Only emitted before
     /// `UpValueScopeNew`
-    WithUpvalue(reg: UpReg)                 << 1,
+    WithUpvalue(up_reg: UpReg)                 << 1,
     /// Copy the upvalue in the given slot of upvalues array. Only emitted before `UpValueScopeNew`
-    WithUpvalueCopy(reg: UpReg)             << 1,
+    WithUpvalueCopy(up_reg: UpReg)             << 1,
     /// Load the specified upvalue onto stack
-    LoadUpvalue(reg: UpReg)                 << 1,
+    LoadUpvalue(up_reg: UpReg)                 << 1,
     /// Store the value on stack to the given upvalue
-    StoreUpvalue(reg: UpReg)       >> 1,
+    StoreUpvalue(up_reg: UpReg)       >> 1,
     /// Detach the given upvalue, moving it into the heap.
-    UpValueDetach(reg: UpReg),
+    UpValueDetach(up_reg: UpReg),
 
     /// Push the global scope onto stack
     PushGlobalObject                       << 1,

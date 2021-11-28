@@ -404,6 +404,14 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_def_stmt(&mut self, v: FuncDef) {
+        let entry = self.scope.insert(
+            v.name().name().text().into(),
+            ScopeEntry {
+                kind: scope::ScopeEntryKind::Function,
+                is_public: v.vis().map(|v| v.public().is_some()).unwrap_or_default(),
+            },
+        );
+
         let mut cx = FunctionCompileCtx::new(
             ScopeBuilder::new(
                 v.node().text_range().start().into(),
@@ -429,14 +437,14 @@ impl<'a> FunctionCompileCtx<'a> {
             match capture {
                 ScopeVariable::Local(slot) => self.curr_bb().emit_p(Inst::WithUpvalue, slot),
                 ScopeVariable::Upvalue(slot) => self.curr_bb().emit_p(Inst::WithUpvalueCopy, slot),
-                ScopeVariable::Module => todo!("Should not occur"),
+                ScopeVariable::Module => panic!("Module variables should not be captured"),
             };
         }
 
         self.curr_bb()
-            .emit_p(Inst::ClosureNew, meta.upvalue_capture.upvalue_cnt());
-
-        todo!()
+            .emit_p(Inst::ClosureNew, meta.upvalue_capture.upvalue_cnt())
+            .emit_p(Inst::StoreLocal, entry)
+            .emit(Inst::Pop);
     }
 
     fn compile_let_stmt(&mut self, let_stmt: LetStmt) {
@@ -698,19 +706,34 @@ impl<'a> FunctionCompileCtx<'a> {
 
     fn compile_function_call_expr(&mut self, v: FunctionCallExpr, tail: bool) {
         let expr = v.func();
-        self.compile_expr(expr.clone());
+        let is_method_call = matches!(expr, Expr::Dot(_));
+        if !is_method_call {
+            self.compile_expr(expr);
+        } else {
+            match expr {
+                Expr::Dot(dot) => {
+                    self.compile_expr(dot.parent());
+                    let sub = dot.subscript();
+                    let cid = self.constants.insert_string(sub.text());
+                    self.curr_bb().emit_p(Inst::PushConst, cid);
+                }
+                _ => unreachable!(),
+            }
+        }
 
-        let is_method_call = matches!(expr, Expr::Subscript(_) | Expr::Dot(_));
         let param_cnt = v.params().count();
         for param in v.params() {
             self.compile_expr(param);
         }
 
-        if is_method_call {
-            self.curr_bb().emit_p(Inst::Call, param_cnt as u32);
-        } else {
-            self.curr_bb().emit_p(Inst::CallMethod, param_cnt as u32);
-        }
+        match (tail, is_method_call) {
+            (false, false) => self.curr_bb().emit_p(Inst::Call, param_cnt as u32),
+            (false, true) => self.curr_bb().emit_p(Inst::CallMethod, param_cnt as u32),
+            (true, false) => self.curr_bb().emit_p(Inst::TailCall, param_cnt as u32),
+            (true, true) => self
+                .curr_bb()
+                .emit_p(Inst::TailCallMethod, param_cnt as u32),
+        };
     }
 
     /// Compile an identifier expression (RValue).
@@ -875,7 +898,37 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_lambda_expr(&mut self, v: LambdaExpr) {
-        todo!()
+        let mut cx = FunctionCompileCtx::new(
+            ScopeBuilder::new(
+                v.node().text_range().start().into(),
+                ScopeType::Function,
+                Some(&self.scope),
+            ),
+            self.symbol_list.clone(),
+        );
+        cx.compile_lambda_scope(v);
+
+        let (f, meta) = cx.finish();
+        let f = Arc::new(f);
+
+        let c_entry = self.constants.insert(Constant::FunctionBody(f.into()));
+        self.curr_bb().emit_p(Inst::PushConst, c_entry);
+
+        let mut captures =
+            vec![ScopeVariable::Local(0); meta.upvalue_capture.upvalue_cnt() as usize];
+        meta.upvalue_capture
+            .captures()
+            .for_each(|(k, v)| captures[v as usize] = k);
+        for capture in captures {
+            match capture {
+                ScopeVariable::Local(slot) => self.curr_bb().emit_p(Inst::WithUpvalue, slot),
+                ScopeVariable::Upvalue(slot) => self.curr_bb().emit_p(Inst::WithUpvalueCopy, slot),
+                ScopeVariable::Module => panic!("Module variables should not be captured"),
+            };
+        }
+
+        self.curr_bb()
+            .emit_p(Inst::ClosureNew, meta.upvalue_capture.upvalue_cnt());
     }
 
     fn compile_return_expr(&mut self, v: ReturnExpr) {
