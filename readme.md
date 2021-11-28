@@ -22,13 +22,13 @@ Inkstone is inspired by [RenPy][]. Various aspects of Inkstone are inspired by [
 | :----: | ------------------------ |
 | Usable | Lexing                   |
 | Usable | Parsing                  |
-|  WIP   | Bytecode definition      |
+| Usable | Bytecode definition      |
 | Usable | - Bytecode               |
 |  WIP   | - Other data structures  |
 |  WIP   | Bytecode generation      |
-|  WIP   | - Symbol table           |
-|   No   | - Constant table         |
-|   No   | - Closure handling       |
+| Usable | - Symbol table           |
+| Usable | - Constant table         |
+|  WIP   | - Closure handling       |
 |   No   | - Module system          |
 |  WIP   | - Code generation        |
 |  WIP   | Bytecode virtual machine |
