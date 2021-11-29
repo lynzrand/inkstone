@@ -151,6 +151,9 @@ impl TaskList {
 }
 
 impl InkstoneVm {
+    /// The loop executing different tasks.
+    ///
+    /// This loop is responsible for running every task
     pub fn event_loop(&mut self) {
         if self.active_task.is_null() && self.task_list.is_queue_empty() {
             // There's nothing we can do if we don't have an active task and no tasks in the loop
@@ -166,11 +169,37 @@ impl InkstoneVm {
         }
 
         loop {
-            self.interpret_loop();
+            self.task_loop();
             if let Some(task) = self.task_list.pop_task() {
                 self.active_task = task.as_ptr();
             } else {
                 break;
+            }
+        }
+    }
+
+    /// The loop executing a single task. It drives the task until it completes, panics or yields.
+    fn task_loop(&mut self) {
+        loop {
+            let action = self.interpret_loop();
+            match action {
+                InstAction::Continue => unreachable!("Continue action will not break the loop"),
+                InstAction::Return => unsafe {
+                    let next_frame = (*self.active_task).stack_top.as_ref().caller;
+                    if let Some(next_frame) = next_frame {
+                        // TODO: deallocate current frame
+                        (*self.active_task).stack_top = next_frame
+                    } else {
+                        // the task returns
+                        break;
+                    }
+                },
+                InstAction::Call => todo!(),
+                InstAction::TailCall => todo!(),
+                InstAction::CallMethod => todo!(),
+                InstAction::TailCallMethod => todo!(),
+                InstAction::Yield => todo!(),
+                InstAction::Panic => todo!(),
             }
         }
     }
@@ -180,11 +209,11 @@ impl InkstoneVm {
     /// Unlike the similar structure in QuickJS and other interpreters, this loop is **not**
     /// recursive. Non-builtin function calls break out of this loop and executes as a separate
     /// action, instead of being called as a subroutine.
-    fn interpret_loop(&mut self) {
-        let action = loop {
+    fn interpret_loop(&mut self) -> InstAction {
+        let frame = unsafe { (*self.active_task).stack_top.as_mut() };
+        loop {
             // We have a unique mutable reference on the frame. This reference will last until the
             // end of loop.
-            let frame = unsafe { (*self.active_task).stack_top.as_mut() };
             let inst = frame.read_inst();
             let cx = InstExecCtx {
                 alloc: &mut self.allocator,
@@ -193,16 +222,6 @@ impl InkstoneVm {
             if action != InstAction::Continue {
                 break action;
             }
-        };
-        match action {
-            InstAction::Continue => unreachable!("Continue action will not break the loop"),
-            InstAction::Return => todo!(),
-            InstAction::Call => todo!(),
-            InstAction::TailCall => todo!(),
-            InstAction::CallMethod => todo!(),
-            InstAction::TailCallMethod => todo!(),
-            InstAction::Yield => todo!(),
-            InstAction::Panic => todo!(),
         }
     }
 }
