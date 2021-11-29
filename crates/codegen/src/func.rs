@@ -308,10 +308,7 @@ impl<'a> FunctionCompileCtx<'a> {
             self.param_cnt += 1;
             self.scope.insert(
                 it.name().text().into(),
-                ScopeEntry {
-                    kind: scope::ScopeEntryKind::Variable,
-                    is_public: false,
-                },
+                ScopeEntry::new(scope::ScopeEntryKind::Variable, false),
             );
         }
         self.compile_expr_with_tail(scope.body(), true);
@@ -324,10 +321,7 @@ impl<'a> FunctionCompileCtx<'a> {
             self.param_cnt += 1;
             self.scope.insert(
                 it.name().text().into(),
-                ScopeEntry {
-                    kind: scope::ScopeEntryKind::Variable,
-                    is_public: false,
-                },
+                ScopeEntry::new(scope::ScopeEntryKind::Variable, false),
             );
         }
         self.compile_expr_with_tail(scope.body(), true);
@@ -342,10 +336,7 @@ impl<'a> FunctionCompileCtx<'a> {
             if let Some(t) = name {
                 self.scope.insert(
                     t.into(),
-                    ScopeEntry {
-                        kind: scope::ScopeEntryKind::Variable,
-                        is_public: true,
-                    },
+                    ScopeEntry::new(scope::ScopeEntryKind::Variable, true),
                 );
             }
         }
@@ -358,10 +349,7 @@ impl<'a> FunctionCompileCtx<'a> {
             let name = name.text();
             self.scope.insert(
                 name.into(),
-                ScopeEntry {
-                    kind: scope::ScopeEntryKind::Function,
-                    is_public: true,
-                },
+                ScopeEntry::new(scope::ScopeEntryKind::Function, true),
             );
         }
     }
@@ -406,10 +394,10 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_def_stmt(&mut self, v: FuncDef) {
         let entry = self.scope.insert(
             v.name().name().text().into(),
-            ScopeEntry {
-                kind: scope::ScopeEntryKind::Function,
-                is_public: v.vis().map(|v| v.public().is_some()).unwrap_or_default(),
-            },
+            ScopeEntry::new(
+                scope::ScopeEntryKind::Function,
+                v.vis().map(|v| v.public().is_some()).unwrap_or_default(),
+            ),
         );
 
         let mut cx = FunctionCompileCtx::new(
@@ -467,10 +455,7 @@ impl<'a> FunctionCompileCtx<'a> {
 
                 self.scope.insert(
                     name.into(),
-                    ScopeEntry {
-                        kind: scope::ScopeEntryKind::Variable,
-                        is_public: pub_vis.is_some(),
-                    },
+                    ScopeEntry::new(scope::ScopeEntryKind::Variable, pub_vis.is_some()),
                 )
             } else {
                 self.emit_error(CompileError::new("pub_let_redefinition", binding.span()));
@@ -758,10 +743,7 @@ impl<'a> FunctionCompileCtx<'a> {
                 // error recovery: insert this variable. It is now undefined.
                 self.scope.insert(
                     name.text().into(),
-                    ScopeEntry {
-                        kind: scope::ScopeEntryKind::Variable,
-                        is_public: false,
-                    },
+                    ScopeEntry::new(scope::ScopeEntryKind::Variable, false),
                 );
             }
         }

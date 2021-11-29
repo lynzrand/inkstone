@@ -1,6 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use fnv::FnvBuildHasher;
 use inkstone_syn::ast::{BlockScope, Expr, FuncDef};
@@ -36,27 +36,28 @@ pub struct ScopeBuilder<'a> {
 #[derive(Debug, Default)]
 pub struct UpValueCapture {
     /// Mapping from **super scope slots** to local scope slot and upvalue kind.
-    captures: BTreeMap<ScopeVariable, u32>,
-    upvalue_cnt: u32,
+    scope_captures: BTreeMap<ScopeVariable, u32>,
+    /// The count of upvalue array of **this function**
+    local_upvalue_cnt: u32,
 }
 
 impl UpValueCapture {
     pub fn captures(&self) -> impl Iterator<Item = (ScopeVariable, u32)> + '_ {
-        self.captures.iter().map(|(k, v)| (*k, *v))
+        self.scope_captures.iter().map(|(k, v)| (*k, *v))
     }
 
     pub fn upvalue_cnt(&self) -> u32 {
-        self.upvalue_cnt
+        self.local_upvalue_cnt
     }
 
     pub fn get(&self, super_slot: &ScopeVariable) -> Option<u32> {
-        self.captures.get(super_slot).copied()
+        self.scope_captures.get(super_slot).copied()
     }
 
     pub fn insert(&mut self, super_slot: ScopeVariable) -> u32 {
-        let slot = self.upvalue_cnt;
-        self.upvalue_cnt += 1;
-        self.captures.insert(super_slot, slot);
+        let slot = self.local_upvalue_cnt;
+        self.local_upvalue_cnt += 1;
+        self.scope_captures.insert(super_slot, slot);
         slot
     }
 }
@@ -90,10 +91,10 @@ impl<'a> ScopeBuilder<'a> {
         self.scope_stack.push(LexicalScope::default());
     }
 
-    pub fn pop_scope(&mut self) {
+    pub fn pop_scope(&mut self) -> LexicalScope {
         self.scope_stack
             .pop()
-            .expect("This ScopeMap pops its last scope. what happened?");
+            .expect("This ScopeMap pops its last scope. what happened?")
     }
 
     pub fn insert(&mut self, name: SmolStr, entry: ScopeEntry) -> u32 {
@@ -140,6 +141,10 @@ impl<'a> ScopeBuilder<'a> {
         self.super_scope.and_then(|scope| scope.get(name))
     }
 
+    pub fn set_captured_local_variable(&self, reg: u32) {
+        self.locals[reg as usize].set_captured();
+    }
+
     /// Search for the given name in local scope. If found, return `Some((slot, false))`.
     /// If not, search for the given name in super scopes and recursively add it into the upvalue
     /// stack.
@@ -149,25 +154,27 @@ impl<'a> ScopeBuilder<'a> {
             return Some(ScopeVariable::Local(slot));
         }
 
-        if let Some(slot) = self
-            .super_scope
-            .and_then(|scope| scope.get_local_or_add_upvalue(name))
-        {
-            if self
-                .super_scope
-                .map(|s| s.super_scope.is_none())
-                .unwrap_or_default()
-            {
-                // super scope is module scope
-                return Some(ScopeVariable::Module);
-            }
+        if let Some(super_scope) = &self.super_scope {
+            if let Some(slot) = super_scope.get_local_or_add_upvalue(name) {
+                if super_scope.super_scope.is_none() {
+                    // super scope is module scope
+                    return Some(ScopeVariable::Module);
+                }
 
-            let mut capture = self.upvalue_capture.borrow_mut();
-            if let Some(slot) = capture.get(&slot) {
-                return Some(ScopeVariable::Upvalue(slot));
+                if let ScopeVariable::Local(reg) = slot {
+                    // Tell super scope that this variable has been captured
+                    super_scope.set_captured_local_variable(reg);
+                }
+
+                let mut capture = self.upvalue_capture.borrow_mut();
+                if let Some(slot) = capture.get(&slot) {
+                    return Some(ScopeVariable::Upvalue(slot));
+                }
+                let local_upvalue_slot = capture.insert(slot);
+                Some(ScopeVariable::Upvalue(local_upvalue_slot))
+            } else {
+                None
             }
-            let local_upvalue_slot = capture.insert(slot);
-            Some(ScopeVariable::Upvalue(local_upvalue_slot))
         } else {
             None
         }
@@ -205,8 +212,37 @@ pub enum ScopeEntryKind {
     Module,
 }
 
+/// A scope entry.
+///
+/// Since `Cell<T>` is `repr(transparent)`, we can safely transmute this struct
+/// into a [`FrozenScopeEntry`] if needed (although seems like we don't need it now).
+#[repr(C)]
 #[derive(Debug)]
 pub struct ScopeEntry {
     pub kind: ScopeEntryKind,
     pub is_public: bool,
+    pub is_captured: Cell<bool>,
+}
+
+impl ScopeEntry {
+    pub fn new(kind: ScopeEntryKind, is_public: bool) -> Self {
+        Self {
+            kind,
+            is_public,
+            is_captured: false.into(),
+        }
+    }
+
+    pub fn set_captured(&self) {
+        self.is_captured.set(true);
+    }
+}
+
+/// A frozen scope entry.
+#[repr(C)]
+#[derive(Debug)]
+pub struct FrozenScopeEntry {
+    pub kind: ScopeEntryKind,
+    pub is_public: bool,
+    pub is_captured: bool,
 }
