@@ -1,5 +1,6 @@
 use std::alloc::Layout;
 use std::borrow::Borrow;
+use std::collections::HashSet;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
@@ -9,7 +10,7 @@ use inkstone_bytecode::inst::{Inst, InstContainer};
 use crate::gc::alloc::GcAllocator;
 use crate::gc::{Gc, RawGcPtr};
 use crate::task::Task;
-use crate::value::{Function, TupleHeader, Val};
+use crate::value::{Closure, Function, TupleHeader, Val};
 
 pub(crate) struct Frame {
     /// The caller of this frame. If the caller is `None`, this frame should signal the completion
@@ -83,12 +84,96 @@ impl InstContainer for Frame {
 
 pub struct InkstoneVm {
     /// The current active frame.
-    active_frame: *mut Frame,
+    active_task: *mut Task,
+    /// The garbage collector and allocator
     allocator: GcAllocator,
+    task_list: TaskList,
+}
+
+struct TaskList {
+    sleeping_tasks: HashSet<NonNull<Task>>,
+    event_queue_start: *mut Task,
+    event_queue_end: *mut Task,
+}
+
+impl TaskList {
+    fn is_queue_empty(&self) -> bool {
+        debug_assert_eq!(
+            self.event_queue_start.is_null(),
+            self.event_queue_end.is_null()
+        );
+        self.event_queue_start.is_null()
+    }
+
+    fn pop_task(&mut self) -> Option<NonNull<Task>> {
+        let task = NonNull::new(self.event_queue_start)?;
+        let next_task = unsafe { task.as_ref() }.next;
+        self.event_queue_start = next_task;
+        if next_task.is_null() {
+            self.event_queue_end = std::ptr::null_mut();
+        }
+        Some(task)
+    }
+
+    fn push_task(&mut self, mut task: NonNull<Task>) {
+        if self.event_queue_start.is_null() {
+            debug_assert!(
+                self.event_queue_end.is_null(),
+                "The event queue should be either empty or occupied"
+            );
+            self.event_queue_start = task.as_ptr();
+            self.event_queue_end = task.as_ptr();
+            unsafe {
+                task.as_mut().next = std::ptr::null_mut();
+            }
+        } else {
+            let last_end = self.event_queue_end;
+            self.event_queue_end = task.as_ptr();
+            unsafe {
+                debug_assert!(
+                    (*last_end).next.is_null(),
+                    "The chain end should not have a next value"
+                );
+                (*last_end).next = task.as_ptr();
+                task.as_mut().next = std::ptr::null_mut();
+            }
+        }
+    }
+
+    fn add_sleeping(&mut self, task: NonNull<Task>) {
+        self.sleeping_tasks.insert(task);
+    }
+
+    fn wake_sleeping(&mut self, task: NonNull<Task>) {
+        self.sleeping_tasks.remove(&task);
+        self.push_task(task);
+    }
 }
 
 impl InkstoneVm {
-    fn event_loop(&mut self) {}
+    pub fn event_loop(&mut self) {
+        if self.active_task.is_null() && self.task_list.is_queue_empty() {
+            // There's nothing we can do if we don't have an active task and no tasks in the loop
+            return;
+        }
+
+        if self.active_task.is_null() {
+            let new_task = self
+                .task_list
+                .pop_task()
+                .expect("Task list should not be empty, as stated before");
+            self.active_task = new_task.as_ptr();
+        }
+
+        loop {
+            self.interpret_loop();
+            if let Some(task) = self.task_list.pop_task() {
+                self.active_task = task.as_ptr();
+            } else {
+                break;
+            }
+        }
+    }
 
     /// The main interpreting loop.
     ///
@@ -99,7 +184,7 @@ impl InkstoneVm {
         let action = loop {
             // We have a unique mutable reference on the frame. This reference will last until the
             // end of loop.
-            let frame = unsafe { self.active_frame.as_mut().unwrap() };
+            let frame = unsafe { (*self.active_task).stack_top.as_mut() };
             let inst = frame.read_inst();
             let cx = InstExecCtx {
                 alloc: &mut self.allocator,
@@ -162,15 +247,7 @@ struct InstExecCtx<'r> {
 }
 
 impl<'r> InstExecCtx<'r> {
-    unsafe fn alloc_mem(
-        &mut self,
-        layout: Layout,
-        vtable: *const crate::gc::TraceVTable,
-    ) -> Option<crate::gc::RawGcPtr> {
-        self.alloc.alloc_raw(layout, vtable)
-    }
-
-    fn create_task(&mut self, task: Gc<Task>) {
+    fn create_task(&mut self, closure: Gc<Closure>, params: &[Gc<Val>]) -> Gc<Task> {
         todo!("create task")
     }
 
@@ -184,6 +261,11 @@ impl<'r> InstExecCtx<'r> {
 
     fn call_builtin(&mut self, f: &str) {
         todo!("call builtin function")
+    }
+
+    /// Get the allocator
+    fn alloc_mut(&mut self) -> &mut GcAllocator {
+        self.alloc
     }
 }
 
@@ -312,10 +394,58 @@ fn exec_inst(inst: Inst, frame: &mut Frame, cx: InstExecCtx<'_>) -> InstAction {
                 todo!("rem slow")
             }
         }
-        Inst::Pow => todo!(),
-        Inst::BitAnd => todo!(),
-        Inst::BitOr => todo!(),
-        Inst::BitXor => todo!(),
+        Inst::Pow => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                if !(0..u32::MAX as i64).contains(&r) {
+                    Panic
+                } else {
+                    frame.push(Val::Int(l.pow(r as u32)));
+                    Continue
+                }
+            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+                frame.push(Val::Float(l % r));
+                Continue
+            } else {
+                todo!("rem slow")
+            }
+        }
+        Inst::BitAnd => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_bool(), rhs.as_bool()) {
+                frame.push(Val::Bool(l & r));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l & r));
+                Continue
+            } else {
+                Panic
+            }
+        }
+        Inst::BitOr => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_bool(), rhs.as_bool()) {
+                frame.push(Val::Bool(l | r));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l & r));
+                Continue
+            } else {
+                Panic
+            }
+        }
+        Inst::BitXor => {
+            let (lhs, rhs) = frame.pop2();
+            if let (Some(l), Some(r)) = (lhs.as_bool(), rhs.as_bool()) {
+                frame.push(Val::Bool(l ^ r));
+                Continue
+            } else if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+                frame.push(Val::Int(l ^ r));
+                Continue
+            } else {
+                Panic
+            }
+        }
         Inst::Shl => todo!(),
         Inst::Shr => todo!(),
         Inst::ShrL => todo!(),
@@ -331,23 +461,33 @@ fn exec_inst(inst: Inst, frame: &mut Frame, cx: InstExecCtx<'_>) -> InstAction {
         }
         Inst::Not => {
             let lhs = frame.pop();
-            if lhs.is_bool() {
-                frame.push(Val::Bool(!lhs.to_bool()));
-                Continue
-            } else if let Some(i) = lhs.as_int() {
-                // ~i
-                frame.push(Val::Int(!i));
-                Continue
-            } else {
-                todo!("not slow")
-            }
+            frame.push(Val::Bool(lhs.to_bool()));
+            Continue
         }
-        Inst::Lt => todo!(),
-        Inst::Gt => todo!(),
-        Inst::Le => todo!(),
-        Inst::Ge => todo!(),
-        Inst::Eq => todo!(),
-        Inst::Ne => todo!(),
+        Inst::Lt => {
+            // TODO: implement
+            Continue
+        }
+        Inst::Gt => {
+            // TODO: implement
+            Continue
+        }
+        Inst::Le => {
+            // TODO: implement
+            Continue
+        }
+        Inst::Ge => {
+            // TODO: implement
+            Continue
+        }
+        Inst::Eq => {
+            // TODO: implement
+            Continue
+        }
+        Inst::Ne => {
+            // TODO: implement
+            Continue
+        }
         Inst::TupleNew => {
             let cnt = frame.read_param::<u32>();
             let mut stack = frame.stack_mut();

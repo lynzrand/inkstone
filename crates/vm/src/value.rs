@@ -1,3 +1,5 @@
+mod tuple;
+
 use std::alloc::Layout;
 use std::collections::{HashMap, VecDeque};
 use std::ptr::NonNull;
@@ -40,6 +42,14 @@ impl Val {
     /// [`Bool`]: Val::Bool
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool(..))
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        if let Self::Bool(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
     }
 
     /// Convert this value to boolean.
