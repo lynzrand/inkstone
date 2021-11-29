@@ -157,6 +157,7 @@ pub struct ConstantTableBuilder {
     constants: Vec<Constant>,
     reverse_map: FnvHashMap<Constant, u32>,
     reverse_string_map: FnvHashMap<SmolStr, u32>,
+    reverse_symbol_map: FnvHashMap<SmolStr, u32>,
 }
 
 impl ConstantTableBuilder {
@@ -173,7 +174,11 @@ impl ConstantTableBuilder {
     }
 
     pub fn insert_symbol(&mut self, s: &str) -> u32 {
-        todo!()
+        if let Some(v) = self.reverse_symbol_map.get(s) {
+            *v
+        } else {
+            self.do_insert_constant(Constant::Symbol(s.into()))
+        }
     }
 
     pub fn insert(&mut self, mut v: Constant) -> u32 {
@@ -204,6 +209,9 @@ impl ConstantTableBuilder {
         match &v {
             Constant::String(s) => {
                 self.reverse_string_map.insert(s.clone(), id);
+            }
+            Constant::Symbol(s) => {
+                self.reverse_symbol_map.insert(s.clone(), id);
             }
             _ => {}
         }
@@ -667,7 +675,7 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_dot_left_value(&mut self, v: DotExpr) -> Option<LValue> {
         self.compile_expr(v.parent());
         let subscript = v.subscript();
-        let const_id = self.constants.insert_string(subscript.text());
+        let const_id = self.constants.insert_symbol(subscript.text());
         Some(LValue::Subscript(const_id))
     }
 
@@ -758,7 +766,7 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_dot_expr(&mut self, v: DotExpr) {
         self.compile_expr(v.parent());
         let subscript = v.subscript();
-        let const_id = self.constants.insert_string(subscript.text());
+        let const_id = self.constants.insert_symbol(subscript.text());
         self.curr_bb().emit_p(Inst::LoadField, const_id);
     }
 
@@ -872,10 +880,16 @@ impl<'a> FunctionCompileCtx<'a> {
                 self.curr_bb().emit(Inst::PushNil);
             }
             inkstone_syn::ast::LiteralKind::String => {
-                let const_id = self.constants.insert_string(lit.token().text());
+                let s = lit.token().text();
+                let s = &s[1..(s.len() - 1)];
+                // TODO: unescape `s`
+                let const_id = self.constants.insert_string(s);
                 self.curr_bb().emit_p(Inst::PushConst, const_id);
             }
-            inkstone_syn::ast::LiteralKind::Symbol => todo!(),
+            inkstone_syn::ast::LiteralKind::Symbol => {
+                let const_id = self.constants.insert_symbol(&lit.token().text()[1..]);
+                self.curr_bb().emit_p(Inst::PushConst, const_id);
+            }
         }
     }
 
