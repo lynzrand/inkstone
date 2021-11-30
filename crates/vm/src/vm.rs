@@ -185,16 +185,23 @@ impl InkstoneVm {
             match action {
                 InstAction::Continue => unreachable!("Continue action will not break the loop"),
                 InstAction::Return => unsafe {
-                    let next_frame = (*self.active_task).stack_top.as_ref().caller;
-                    if let Some(next_frame) = next_frame {
+                    let mut stack_top = (*self.active_task)
+                        .stack_top
+                        .expect("The task must be active");
+                    let return_val = stack_top.as_mut().pop();
+                    let next_frame = stack_top.as_ref().caller;
+                    if let Some(mut next_frame) = next_frame {
                         // TODO: deallocate current frame
-                        (*self.active_task).stack_top = next_frame
+                        next_frame.as_mut().push(return_val);
+                        (*self.active_task).stack_top = Some(next_frame);
                     } else {
                         // the task returns
+                        (*self.active_task).result = Some(return_val);
+                        (*self.active_task).stack_top = None;
                         break;
                     }
                 },
-                InstAction::Call => todo!(),
+                InstAction::Call => {}
                 InstAction::TailCall => todo!(),
                 InstAction::CallMethod => todo!(),
                 InstAction::TailCallMethod => todo!(),
@@ -210,7 +217,12 @@ impl InkstoneVm {
     /// recursive. Non-builtin function calls break out of this loop and executes as a separate
     /// action, instead of being called as a subroutine.
     fn interpret_loop(&mut self) -> InstAction {
-        let frame = unsafe { (*self.active_task).stack_top.as_mut() };
+        let frame = unsafe {
+            (*self.active_task)
+                .stack_top
+                .expect("Stack top must be available")
+                .as_mut()
+        };
         loop {
             // We have a unique mutable reference on the frame. This reference will last until the
             // end of loop.
