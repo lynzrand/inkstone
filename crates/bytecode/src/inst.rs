@@ -178,9 +178,9 @@ define_inst! {
     GetPrototype                 >> 1     << 1,
 
     /// Load a field from an object using the `idx`th constant in table as index.
-    LoadField(idx: ConstIdx)          >> 1     << 1,
+    LoadField(idx: ConstIdx)     >> 1     << 1,
     /// Store a field into an object using the `idx`th constant in table as index.
-    StoreField(idx: ConstIdx)         >> 2,
+    StoreField(idx: ConstIdx)    >> 2,
     /// Load a field from an object using a dynamic symbol or number as index.
     LoadFieldDyn                 >> 2     << 1,
     /// Storing a field from an object using a dynamic symbol or number as index.
@@ -199,13 +199,13 @@ define_inst! {
     UpValueScopeNew(len: Cnt)             << 1,
     /// Create a new upvalue, referencing the given slot in the local register. Only emitted before
     /// `UpValueScopeNew`
-    WithUpvalue(up_reg: UpReg)                 << 1,
+    WithUpvalue(up_reg: UpReg)            << 1,
     /// Copy the upvalue in the given slot of upvalues array. Only emitted before `UpValueScopeNew`
-    WithUpvalueCopy(up_reg: UpReg)             << 1,
+    WithUpvalueCopy(up_reg: UpReg)        << 1,
     /// Load the specified upvalue onto stack
-    LoadUpvalue(up_reg: UpReg)                 << 1,
+    LoadUpvalue(up_reg: UpReg)            << 1,
     /// Store the value on stack to the given upvalue
-    StoreUpvalue(up_reg: UpReg)       >> 1,
+    StoreUpvalue(up_reg: UpReg)   >> 1,
     /// Detach the given upvalue, moving it into the heap.
     UpValueDetach(up_reg: UpReg),
 
