@@ -15,7 +15,7 @@ use crate::value::{Closure, Function, TupleHeader, Val};
 pub(crate) struct Frame {
     /// The caller of this frame. If the caller is `None`, this frame should signal the completion
     /// of the task it's in when returning.
-    caller: Option<NonNull<Frame>>,
+    caller: Option<Gc<Frame>>,
     /// The function this frame is tied to.
     func: Gc<Function>,
     stack: Vec<Val>,
@@ -23,7 +23,7 @@ pub(crate) struct Frame {
 }
 
 impl Frame {
-    pub fn new(func: Gc<Function>, caller: Option<NonNull<Frame>>) -> Self {
+    pub fn new(func: Gc<Function>, caller: Option<Gc<Frame>>) -> Self {
         Self {
             caller,
             func,
@@ -84,68 +84,68 @@ impl InstContainer for Frame {
 
 pub struct InkstoneVm {
     /// The current active frame.
-    active_task: *mut Task,
+    active_task: Option<Gc<Task>>,
     /// The garbage collector and allocator
     allocator: GcAllocator,
     task_list: TaskList,
 }
 
 struct TaskList {
-    sleeping_tasks: HashSet<NonNull<Task>>,
-    event_queue_start: *mut Task,
-    event_queue_end: *mut Task,
+    sleeping_tasks: HashSet<RawGcPtr>,
+    event_queue_start: Option<Gc<Task>>,
+    event_queue_end: Option<Gc<Task>>,
 }
 
 impl TaskList {
     fn is_queue_empty(&self) -> bool {
         debug_assert_eq!(
-            self.event_queue_start.is_null(),
-            self.event_queue_end.is_null()
+            self.event_queue_start.is_none(),
+            self.event_queue_end.is_none()
         );
-        self.event_queue_start.is_null()
+        self.event_queue_start.is_none()
     }
 
-    fn pop_task(&mut self) -> Option<NonNull<Task>> {
-        let task = NonNull::new(self.event_queue_start)?;
-        let next_task = unsafe { task.as_ref() }.next;
-        self.event_queue_start = next_task;
-        if next_task.is_null() {
-            self.event_queue_end = std::ptr::null_mut();
+    fn pop_task(&mut self) -> Option<Gc<Task>> {
+        let task = self.event_queue_start.take()?;
+        let next_task = unsafe { task.get_mut() }.next.take();
+        if next_task.is_none() {
+            self.event_queue_end = None;
         }
+        self.event_queue_start = next_task;
         Some(task)
     }
 
-    fn push_task(&mut self, mut task: NonNull<Task>) {
-        if self.event_queue_start.is_null() {
+    fn push_task(&mut self, task: Gc<Task>) {
+        if self.event_queue_start.is_none() {
             debug_assert!(
-                self.event_queue_end.is_null(),
+                self.event_queue_end.is_none(),
                 "The event queue should be either empty or occupied"
             );
-            self.event_queue_start = task.as_ptr();
-            self.event_queue_end = task.as_ptr();
             unsafe {
-                task.as_mut().next = std::ptr::null_mut();
+                task.get_mut().next = None;
             }
+            self.event_queue_start = Some(task.clone());
+            self.event_queue_end = Some(task);
         } else {
-            let last_end = self.event_queue_end;
-            self.event_queue_end = task.as_ptr();
+            let last_end = self.event_queue_end.clone().unwrap();
             unsafe {
                 debug_assert!(
-                    (*last_end).next.is_null(),
+                    (*last_end).next.is_none(),
                     "The chain end should not have a next value"
                 );
-                (*last_end).next = task.as_ptr();
-                task.as_mut().next = std::ptr::null_mut();
+                task.get_mut().next = None;
+                last_end.get_mut().next = Some(task.clone());
             }
+            self.event_queue_end = Some(task);
         }
     }
 
-    fn add_sleeping(&mut self, task: NonNull<Task>) {
-        self.sleeping_tasks.insert(task);
+    fn add_sleeping(&mut self, task: Gc<Task>) {
+        self.sleeping_tasks.insert(task.into());
     }
 
-    fn wake_sleeping(&mut self, task: NonNull<Task>) {
-        self.sleeping_tasks.remove(&task);
+    fn wake_sleeping(&mut self, task: Gc<Task>) {
+        self.sleeping_tasks.remove(&task.as_raw_ptr());
         self.push_task(task);
     }
 }
@@ -155,23 +155,23 @@ impl InkstoneVm {
     ///
     /// This loop is responsible for running every task
     pub fn event_loop(&mut self) {
-        if self.active_task.is_null() && self.task_list.is_queue_empty() {
+        if self.active_task.is_none() && self.task_list.is_queue_empty() {
             // There's nothing we can do if we don't have an active task and no tasks in the loop
             return;
         }
 
-        if self.active_task.is_null() {
+        if self.active_task.is_none() {
             let new_task = self
                 .task_list
                 .pop_task()
                 .expect("Task list should not be empty, as stated before");
-            self.active_task = new_task.as_ptr();
+            self.active_task = Some(new_task);
         }
 
         loop {
             self.task_loop();
             if let Some(task) = self.task_list.pop_task() {
-                self.active_task = task.as_ptr();
+                self.active_task = Some(task);
             } else {
                 break;
             }
@@ -185,19 +185,23 @@ impl InkstoneVm {
             match action {
                 InstAction::Continue => unreachable!("Continue action will not break the loop"),
                 InstAction::Return => unsafe {
-                    let mut stack_top = (*self.active_task)
+                    let active_task = self.active_task.as_ref().unwrap().get_mut();
+                    let stack_top = active_task
                         .stack_top
-                        .expect("The task must be active");
-                    let return_val = stack_top.as_mut().pop();
-                    let next_frame = stack_top.as_ref().caller;
-                    if let Some(mut next_frame) = next_frame {
+                        .as_ref()
+                        .expect("The task must be active")
+                        .get_mut();
+
+                    let return_val = stack_top.pop();
+                    let next_frame = stack_top.caller.take();
+                    if let Some(next_frame) = next_frame {
                         // TODO: deallocate current frame
-                        next_frame.as_mut().push(return_val);
-                        (*self.active_task).stack_top = Some(next_frame);
+                        next_frame.get_mut().push(return_val);
+                        active_task.stack_top = Some(next_frame);
                     } else {
                         // the task returns
-                        (*self.active_task).result = Some(return_val);
-                        (*self.active_task).stack_top = None;
+                        active_task.result = Some(return_val);
+                        active_task.stack_top = None;
                         break;
                     }
                 },
@@ -218,10 +222,14 @@ impl InkstoneVm {
     /// action, instead of being called as a subroutine.
     fn interpret_loop(&mut self) -> InstAction {
         let frame = unsafe {
-            (*self.active_task)
+            self.active_task
+                .as_ref()
+                .unwrap()
+                .get_mut()
                 .stack_top
+                .as_ref()
                 .expect("Stack top must be available")
-                .as_mut()
+                .get_mut()
         };
         loop {
             // We have a unique mutable reference on the frame. This reference will last until the

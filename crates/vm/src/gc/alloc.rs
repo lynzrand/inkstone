@@ -186,7 +186,6 @@ impl GcAllocator {
             new_object.write(GcHeader {
                 flags: GcHeaderFlags::new().with_oversized(false).with_rc(1),
                 size: orig_layout.size() as u32,
-                next_allocation: chunk.next_alloc,
                 trace_impl: vtable,
             });
 
@@ -197,7 +196,7 @@ impl GcAllocator {
             chunk.next_alloc = Some(header);
 
             self.total_mem_allocated += orig_layout.size();
-            Some(RawGcPtr(header))
+            Some(RawGcPtr(header.cast()))
         }
     }
 
@@ -216,12 +215,11 @@ impl GcAllocator {
         ptr.as_ptr().write(GcHeader {
             flags: GcHeaderFlags::new().with_oversized(true).with_rc(1),
             size: orig_layout.size() as u32,
-            next_allocation: self.oversize_chain,
             trace_impl: vtable,
         });
         self.oversize_chain = Some(ptr);
         self.total_mem_allocated += orig_layout.size();
-        Some(RawGcPtr(ptr))
+        Some(RawGcPtr(ptr.cast()))
     }
 
     pub fn trigger_gc(&mut self) {

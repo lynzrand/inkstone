@@ -3,6 +3,8 @@ pub mod alloc;
 mod test;
 use alloc::RootSetHandle;
 use modular_bitfield::prelude::*;
+use std::cell::UnsafeCell;
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
@@ -15,7 +17,7 @@ use self::alloc::GcAllocator;
 /// This pointer is both trace-collected and reference-counted, in order to
 /// achieve a better garbage collection.
 #[repr(transparent)]
-pub struct Gc<T: ?Sized>(NonNull<GcValue<T>>);
+pub struct Gc<T: ?Sized>(NonNull<UnsafeCell<GcValue<T>>>);
 
 impl<T: ?Sized> Gc<T> {
     /// Get a mutable reference from an immutable GC pointer.
@@ -25,11 +27,11 @@ impl<T: ?Sized> Gc<T> {
     /// The user is responsible for not getting two mutable pointers at once.
     #[allow(clippy::mut_from_ref)]
     pub unsafe fn get_mut(&self) -> &mut T {
-        &mut (*self.0.as_ptr()).val
+        &mut (*(*self.0.as_ptr()).get()).val
     }
 
     unsafe fn gc_val_ref(&self) -> &GcValue<T> {
-        &*self.0.as_ptr()
+        (*self.0.as_ptr()).get().as_ref().unwrap()
     }
 
     /// Convert this type into an reference of an untyped [`RawGcPtr`].
@@ -81,7 +83,7 @@ impl<T> Deref for Gc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.0.as_ref().val }
+        unsafe { &(*self.0.as_ref().get()).val }
     }
 }
 
@@ -116,9 +118,8 @@ unsafe fn gc_pointer_before_dropping(mut ptr: NonNull<GcHeader>) {
 /// An untyped GC pointer.
 ///
 /// This type should have the same layout as [`Gc`].
-#[derive(Hash)]
 #[repr(transparent)]
-pub struct RawGcPtr(NonNull<GcHeader>);
+pub struct RawGcPtr(NonNull<UnsafeCell<GcHeader>>);
 
 impl RawGcPtr {
     /// Cast this opaque pointer into the desired type.
@@ -131,11 +132,11 @@ impl RawGcPtr {
     }
 
     fn header(&self) -> &GcHeader {
-        unsafe { self.0.as_ref() }
+        unsafe { &*self.0.as_ref().get() }
     }
 
-    fn header_mut(&mut self) -> &mut GcHeader {
-        unsafe { self.0.as_mut() }
+    unsafe fn header_mut(&mut self) -> &mut GcHeader {
+        unsafe { &mut *self.0.as_mut().get() }
     }
 
     pub fn value(&self) -> NonNull<u8> {
@@ -162,14 +163,28 @@ impl<T> AsRef<RawGcPtr> for Gc<T> {
 impl Clone for RawGcPtr {
     fn clone(&self) -> Self {
         let mut ptr = self.0;
-        unsafe { ptr.as_mut() }.flags.inc_rc();
+        unsafe { &mut *ptr.as_mut().get() }.flags.inc_rc();
         Self(ptr)
     }
 }
 
 impl Drop for RawGcPtr {
     fn drop(&mut self) {
-        unsafe { self.0.as_mut() }.flags.dec_rc();
+        unsafe { &mut *self.0.as_mut().get() }.flags.dec_rc();
+    }
+}
+
+impl PartialEq for RawGcPtr {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for RawGcPtr {}
+
+impl Hash for RawGcPtr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 
@@ -210,7 +225,6 @@ impl<T> GcValue<T> {
 struct GcHeader {
     flags: GcHeaderFlags,
     size: u32,
-    next_allocation: Option<NonNull<GcHeader>>,
     trace_impl: *const TraceVTable,
 }
 
