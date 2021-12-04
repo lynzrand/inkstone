@@ -8,7 +8,7 @@ use std::sync::Arc;
 use smol_str::SmolStr;
 
 use crate::gc::alloc::GcAllocator;
-use crate::gc::{Gc, RawGcPtr};
+use crate::gc::{Gc, RawGcPtr, Trace};
 
 pub enum Val {
     Nil,
@@ -195,6 +195,25 @@ impl Val {
             Some(*v)
         } else {
             None
+        }
+    }
+}
+
+impl Trace for Val {
+    fn trace(&self, tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
+        match self {
+            Val::Nil
+            | Val::Bool(_)
+            | Val::Int(_)
+            | Val::Float(_)
+            | Val::Symbol(_)
+            | Val::String(_) => {}
+
+            Val::Tuple(tuple) => todo!(),
+            Val::Array(arr) => todo!(),
+            Val::Object(obj) => todo!(),
+            Val::Scope(scope) => todo!(),
+            Val::Closure(closure) => todo!(),
         }
     }
 }

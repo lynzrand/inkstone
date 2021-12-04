@@ -1,3 +1,6 @@
+pub(crate) mod frame;
+pub(crate) mod task;
+
 use std::alloc::Layout;
 use std::borrow::Borrow;
 use std::collections::HashSet;
@@ -10,78 +13,10 @@ use inkstone_util::by_ptr::{ByPtr, ByPtrRef};
 
 use crate::gc::alloc::GcAllocator;
 use crate::gc::{Gc, RawGcPtr};
-use crate::task::Task;
 use crate::value::{Closure, Function, TupleHeader, Val};
 
-pub(crate) struct Frame {
-    /// The caller of this frame. If the caller is `None`, this frame should signal the completion
-    /// of the task it's in when returning.
-    caller: Option<Gc<Frame>>,
-    /// The function this frame is tied to.
-    func: Gc<Function>,
-    stack: Vec<Val>,
-    ip: usize,
-}
-
-impl Frame {
-    pub fn new(func: Gc<Function>, caller: Option<Gc<Frame>>) -> Self {
-        Self {
-            caller,
-            func,
-            stack: vec![],
-            ip: 0,
-        }
-    }
-
-    pub fn pop(&mut self) -> Val {
-        self.stack.pop().expect("Popping empty stack")
-    }
-
-    pub fn push(&mut self, val: Val) {
-        self.stack.push(val);
-    }
-
-    pub fn pop2(&mut self) -> (Val, Val) {
-        let rhs = self.pop();
-        let lhs = self.pop();
-        (lhs, rhs)
-    }
-
-    /// Get a mutable reference to the frame's stack.
-    pub fn stack_mut(&mut self) -> &mut Vec<Val> {
-        &mut self.stack
-    }
-
-    /// Get a reference to the frame's func.
-    pub fn func(&self) -> &Function {
-        self.func.borrow()
-    }
-
-    /// Get a reference to the frame's func.
-    pub fn func_pte(&self) -> &Gc<Function> {
-        &self.func
-    }
-}
-
-impl Buf for Frame {
-    fn remaining(&self) -> usize {
-        self.func().inst.len() - self.ip
-    }
-
-    fn chunk(&self) -> &[u8] {
-        &self.func().inst[self.ip..]
-    }
-
-    fn advance(&mut self, cnt: usize) {
-        self.ip += cnt
-    }
-}
-
-impl InstContainer for Frame {
-    fn seek(&mut self, position: usize) {
-        self.ip = position
-    }
-}
+use frame::Frame;
+use task::Task;
 
 pub struct InkstoneVm {
     /// The current active frame.
@@ -188,29 +123,48 @@ impl InkstoneVm {
                 InstAction::Continue => unreachable!("Continue action will not break the loop"),
                 InstAction::Return => unsafe {
                     let active_task = self.active_task.as_ref().unwrap().get_mut();
-                    let stack_top = active_task
+                    let task_finished = active_task
                         .stack_top
-                        .as_ref()
-                        .expect("The task must be active")
-                        .get_mut();
-
-                    let return_val = stack_top.pop();
-                    let next_frame = stack_top.caller.take();
-                    if let Some(next_frame) = next_frame {
-                        // TODO: deallocate current frame
-                        next_frame.get_mut().push(return_val);
-                        active_task.stack_top = Some(next_frame);
-                    } else {
-                        // the task returns
-                        active_task.result = Some(return_val);
-                        active_task.stack_top = None;
+                        .take()
+                        .expect("The stack top must be available")
+                        .with(|f| {
+                            let return_val = f.pop();
+                            let next_frame = f.caller.take();
+                            if let Some(next_frame) = next_frame {
+                                next_frame.with(|f| f.push(return_val));
+                                active_task.stack_top = Some(next_frame);
+                                false
+                            } else {
+                                // the task finishes
+                                active_task.result = Some(return_val);
+                                active_task.stack_top = None;
+                                true
+                            }
+                        });
+                    if task_finished {
                         break;
                     }
                 },
-                InstAction::Call => {}
-                InstAction::TailCall => todo!(),
-                InstAction::CallMethod => todo!(),
-                InstAction::TailCallMethod => todo!(),
+                InstAction::Call | InstAction::CallMethod => {
+                    let active_frame = unsafe { self.active_task.as_ref().unwrap().get_mut() }
+                        .stack_top
+                        .take()
+                        .expect("The frame must be available");
+
+                    let frame = unsafe { active_frame.get_mut() };
+                    let param_cnt = frame.read_param::<u32>();
+
+                    let new_frame = Gc::new(
+                        Frame {
+                            caller: Some(active_frame),
+                            func: todo!(),
+                            stack: todo!(),
+                            ip: todo!(),
+                        },
+                        &mut self.allocator,
+                    );
+                }
+                InstAction::TailCall | InstAction::TailCallMethod => todo!(),
                 InstAction::Yield => todo!(),
                 InstAction::Panic => todo!(),
             }

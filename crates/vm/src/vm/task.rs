@@ -4,7 +4,7 @@ use inkstone_util::string::ArcStr;
 
 use crate::gc::Gc;
 use crate::value::Val;
-use crate::vm::Frame;
+use crate::vm::frame::Frame;
 
 pub struct Task {
     /// The name of this task

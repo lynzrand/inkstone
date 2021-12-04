@@ -32,6 +32,30 @@ impl<T: ?Sized> Gc<T> {
         &mut (*(*self.0.as_ptr()).get()).val
     }
 
+    /// Call `f` with a mutable reference of the value `self` is pointing to.
+    ///
+    /// This method should **not** be used when [`Self::get_mut`] is holding a
+    /// mutable reference. (It's handled on `get_mut`'s side anyway)
+    ///
+    /// # Safety
+    ///
+    /// Yes, this function is unsafe. You can easily alias a mutable pointer in
+    /// this way:
+    ///
+    /// ```notest
+    /// let gc = ...;
+    /// let gc2 = gc.clone();
+    /// gc.with(|val1| gc2.with(...));  // <- Look ma, aliasing &mut's!
+    /// ```
+    ///
+    /// But since this function is not public, we just leave it as is.
+    ///
+    /// Be careful not to alias mutable references!
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        f(unsafe { self.get_mut() })
+    }
+
     unsafe fn gc_val_ref(&self) -> &GcValue<T> {
         (*self.0.as_ptr()).get().as_ref().unwrap()
     }
@@ -46,6 +70,20 @@ impl<T: ?Sized> Gc<T> {
         unsafe {
             NonNull::new_unchecked(self.as_raw_ptr().header() as *const GcHeader as *mut GcHeader)
         }
+    }
+
+    pub fn value_ptr_unsized(&self) -> NonNull<u8> {
+        unsafe {
+            NonNull::new_unchecked(
+                (self.0.as_ptr() as *mut u8).add(std::mem::size_of::<GcHeader>()),
+            )
+        }
+    }
+}
+
+impl<T> Gc<T> {
+    pub fn value_ptr(&self) -> NonNull<T> {
+        unsafe { self.value_ptr_unsized().cast() }
     }
 }
 
@@ -110,6 +148,23 @@ impl<T: ?Sized> Drop for Gc<T> {
 impl<T: ?Sized> AsCmpPtr for Gc<T> {
     fn as_cmp_ptr(&self) -> *const () {
         self.0.as_ptr() as *const ()
+    }
+}
+
+impl<T: ?Sized> Trace for Gc<T> {
+    fn trace(&self, tracer: VRefMut<GcTracerVTable>) {
+        unsafe {
+            let header = unsafe { self.header_ptr().as_ref() };
+            let trace_vtable_ptr = header.trace_impl;
+            let trace_vtable = unsafe { &*header.trace_impl };
+            (trace_vtable.trace)(
+                VRef::from_raw(
+                    NonNull::new_unchecked(trace_vtable_ptr as *mut _),
+                    self.value_ptr_unsized(),
+                ),
+                tracer,
+            );
+        }
     }
 }
 
