@@ -4,6 +4,8 @@ pub(crate) mod task;
 use std::alloc::Layout;
 use std::borrow::Borrow;
 use std::collections::HashSet;
+use std::hint::unreachable_unchecked;
+use std::ops::Deref;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
@@ -145,26 +147,67 @@ impl InkstoneVm {
                         break;
                     }
                 },
-                InstAction::Call | InstAction::CallMethod => {
-                    let active_frame = unsafe { self.active_task.as_ref().unwrap().get_mut() }
-                        .stack_top
-                        .take()
-                        .expect("The frame must be available");
+                InstAction::Call
+                | InstAction::CallMethod
+                | InstAction::TailCall
+                | InstAction::TailCallMethod => {
+                    let task = unsafe { self.active_task.as_ref().unwrap().get_mut() };
+                    let active_frame = task.stack_top.take().expect("The frame must be available");
 
                     let frame = unsafe { active_frame.get_mut() };
                     let param_cnt = frame.read_param::<u32>();
 
-                    let new_frame = Gc::new(
-                        Frame {
-                            caller: Some(active_frame),
-                            func: todo!(),
-                            stack: todo!(),
-                            ip: todo!(),
-                        },
-                        &mut self.allocator,
+                    let closure_param_offset = match action {
+                        InstAction::Call | InstAction::TailCall => {
+                            frame.stack.len() - param_cnt as usize - 1
+                        }
+                        InstAction::CallMethod | InstAction::TailCallMethod => {
+                            frame.stack.len() - param_cnt as usize - 2
+                        }
+                        _ => unsafe { unreachable_unchecked() },
+                    };
+
+                    let func_closure =
+                        match frame.stack[closure_param_offset].clone().try_into_closure() {
+                            Ok(closure) => closure,
+                            Err(_) => {
+                                todo!("Panic this task because value is not a closure")
+                            }
+                        };
+
+                    let self_param = if func_closure.func.binds_self
+                        && matches!(action, InstAction::CallMethod | InstAction::TailCallMethod)
+                    {
+                        Some(frame.stack[frame.stack.len() - param_cnt as usize - 1].clone())
+                    } else {
+                        None
+                    };
+
+                    let iter = self_param.into_iter().chain(
+                        frame
+                            .stack
+                            .drain((frame.stack.len() - param_cnt as usize)..),
                     );
+
+                    let caller = match action {
+                        InstAction::Call | InstAction::CallMethod => Some(active_frame.clone()),
+                        InstAction::TailCall | InstAction::TailCallMethod => {
+                            active_frame.caller.clone()
+                        }
+                        _ => unsafe { unreachable_unchecked() },
+                    };
+
+                    let new_frame = Frame::new(
+                        func_closure.func.clone(),
+                        caller,
+                        iter,
+                        &func_closure.capture,
+                    );
+
+                    let new_frame = Gc::new(new_frame, &mut self.allocator).expect("Out of memory");
+                    task.stack_top = Some(new_frame);
                 }
-                InstAction::TailCall | InstAction::TailCallMethod => todo!(),
+
                 InstAction::Yield => todo!(),
                 InstAction::Panic => todo!(),
             }

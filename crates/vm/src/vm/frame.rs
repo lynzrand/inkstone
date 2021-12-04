@@ -4,26 +4,43 @@ use bytes::Buf;
 use inkstone_bytecode::inst::InstContainer;
 
 use crate::gc::{Gc, GcTracerVTable, Trace};
-use crate::value::{Function, Val};
+use crate::value::{Function, UpValue, Val};
 use crate::*;
 
-pub(crate) struct Frame {
+pub struct Frame {
     /// The caller of this frame. If the caller is `None`, this frame should signal the completion
     /// of the task it's in when returning.
     pub caller: Option<Gc<Frame>>,
     /// The function this frame is tied to.
     pub func: Gc<Function>,
     pub stack: Vec<Val>,
+    pub upvalues: Box<[Gc<UpValue>]>,
+    pub locals: Box<[Val]>,
     pub ip: usize,
 }
 
 impl Frame {
-    pub fn new(func: Gc<Function>, caller: Option<Gc<Frame>>) -> Self {
+    pub fn new(
+        func: Gc<Function>,
+        caller: Option<Gc<Frame>>,
+        params: impl Iterator<Item = Val>,
+        capture: &[Gc<UpValue>],
+    ) -> Self {
         Self {
             caller,
-            func,
             stack: vec![],
             ip: 0,
+            upvalues: capture.to_vec().into_boxed_slice(),
+            locals: {
+                let mut locals_vec = Vec::with_capacity(func.locals_cnt as usize);
+                locals_vec.extend(params);
+                locals_vec.extend(
+                    std::iter::repeat(Val::Nil).take((func.locals_cnt - func.param_cnt) as usize),
+                );
+                locals_vec
+            }
+            .into_boxed_slice(),
+            func,
         }
     }
 

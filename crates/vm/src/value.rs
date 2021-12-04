@@ -5,7 +5,9 @@ use std::collections::{HashMap, VecDeque};
 use inkstone_util::string::ArcStr;
 
 use crate::gc::{Gc, RawGcPtr, Trace};
+use crate::vm::frame::Frame;
 
+#[derive(Clone)]
 pub enum Val {
     Nil,
     Bool(bool),
@@ -15,7 +17,6 @@ pub enum Val {
     Tuple(Gc<TupleHeader>),
     Array(Gc<Array>),
     Object(Gc<Object>),
-    Scope(Gc<Scope>),
     Closure(Gc<Closure>),
     Symbol(u64),
 }
@@ -149,21 +150,6 @@ impl Val {
         }
     }
 
-    /// Returns `true` if the val is [`Scope`].
-    ///
-    /// [`Scope`]: Val::Scope
-    pub fn is_scope(&self) -> bool {
-        matches!(self, Self::Scope(..))
-    }
-
-    pub fn as_scope(&self) -> Option<&Gc<Scope>> {
-        if let Self::Scope(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
     /// Returns `true` if the val is [`Closure`].
     ///
     /// [`Closure`]: Val::Closure
@@ -193,6 +179,46 @@ impl Val {
             None
         }
     }
+
+    pub fn try_into_string(self) -> Result<Gc<String>, Self> {
+        if let Self::String(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn try_into_tuple(self) -> Result<Gc<TupleHeader>, Self> {
+        if let Self::Tuple(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn try_into_array(self) -> Result<Gc<Array>, Self> {
+        if let Self::Array(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn try_into_object(self) -> Result<Gc<Object>, Self> {
+        if let Self::Object(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn try_into_closure(self) -> Result<Gc<Closure>, Self> {
+        if let Self::Closure(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
 }
 
 impl Trace for Val {
@@ -208,7 +234,6 @@ impl Trace for Val {
             Val::Tuple(tuple) => todo!(),
             Val::Array(arr) => todo!(),
             Val::Object(obj) => todo!(),
-            Val::Scope(scope) => todo!(),
             Val::Closure(closure) => todo!(),
         }
     }
@@ -270,18 +295,20 @@ pub struct Object {
 
 pub struct Closure {
     pub func: Gc<Function>,
-    pub scope: Gc<Scope>,
+    /// Upvalue captures
+    pub capture: Box<[Gc<UpValue>]>,
 }
 
-pub struct Scope {
-    pub parent: Gc<Scope>,
-    pub val: Vec<Val>,
+pub enum UpValue {
+    Local(Gc<Frame>, u32),
+    Detached(Val),
 }
 
 pub struct Function {
     pub name: Option<ArcStr>,
     pub inst: Vec<u8>,
     pub param_cnt: u32,
+    pub locals_cnt: u32,
     pub binds_self: bool,
     pub has_rest_param: bool,
     pub constants: Vec<Val>,
