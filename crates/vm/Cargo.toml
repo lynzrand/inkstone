@@ -13,5 +13,7 @@ slotmap = "1"
 static_assertions = "1"
 vtable = "0.1"
 
+mimalloc-rust-sys = "1.7.2"
+
 inkstone-bytecode = { path = "../bytecode" }
 inkstone-util = { path = "../util" }

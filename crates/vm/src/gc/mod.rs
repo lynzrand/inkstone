@@ -2,8 +2,9 @@ pub mod alloc;
 #[cfg(test)]
 mod test;
 use alloc::RootSetHandle;
+use mimalloc_rust_sys::basic_allocation::mi_free;
 use modular_bitfield::prelude::*;
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -107,12 +108,16 @@ impl<T: ?Sized> Drop for Gc<T> {
 
 unsafe fn gc_pointer_before_cloning(mut ptr: NonNull<GcHeader>) {
     let header = ptr.as_mut();
-    header.flags.inc_rc();
+    header.inc_rc();
 }
 
 unsafe fn gc_pointer_before_dropping(mut ptr: NonNull<GcHeader>) {
     let header = ptr.as_mut();
-    header.flags.dec_rc();
+    let decreased_to_zero = header.dec_rc();
+    if decreased_to_zero {
+        // Free this pointer
+        mi_free(ptr.as_ptr() as *mut _);
+    }
 }
 
 /// An untyped GC pointer.
@@ -163,14 +168,14 @@ impl<T> AsRef<RawGcPtr> for Gc<T> {
 impl Clone for RawGcPtr {
     fn clone(&self) -> Self {
         let mut ptr = self.0;
-        unsafe { &mut *ptr.as_mut().get() }.flags.inc_rc();
+        unsafe { &mut *ptr.as_mut().get() }.inc_rc();
         Self(ptr)
     }
 }
 
 impl Drop for RawGcPtr {
     fn drop(&mut self) {
-        unsafe { &mut *self.0.as_mut().get() }.flags.dec_rc();
+        unsafe { &mut *self.0.as_mut().get() }.dec_rc();
     }
 }
 
@@ -223,58 +228,40 @@ impl<T> GcValue<T> {
 #[repr(C)]
 #[repr(align(16))]
 struct GcHeader {
-    flags: GcHeaderFlags,
-    size: u32,
+    rc: Cell<u16>,
     trace_impl: *const TraceVTable,
 }
 
 impl GcHeader {
+    pub const fn rc_max() -> u16 {
+        u16::MAX - 1
+    }
+
+    /// Increase reference count.
+    pub fn inc_rc(&mut self) {
+        let rc = self.rc.get();
+        if rc < Self::rc_max() - 1 {
+            self.rc.set(rc + 1)
+        }
+    }
+
+    /// Decrease reference count. If reference count is zero after decrement,
+    /// return `true`.
+    pub fn dec_rc(&mut self) -> bool {
+        let rc = self.rc.get();
+        debug_assert!(rc > 0, "reference count was decreased below 0");
+        if rc < Self::rc_max() - 1 {
+            self.rc.set(rc - 1);
+        }
+        rc == 1
+    }
+
     pub unsafe fn as_value<T>(&self) -> &GcValue<T> {
         std::mem::transmute(self)
     }
 
     pub unsafe fn as_value_mut<T>(&mut self) -> &mut GcValue<T> {
         std::mem::transmute(self)
-    }
-}
-
-#[allow(clippy::all)]
-#[bitfield]
-#[repr(u32)]
-struct GcHeaderFlags {
-    /// Whether this struct is oversized
-    pub oversized: bool,
-
-    /// Color used in GC
-    #[bits = 2]
-    pub color: GcColor,
-
-    /// Reference counting
-    pub rc: B18,
-
-    // dummy
-    #[skip]
-    __: B11,
-}
-
-impl GcHeaderFlags {
-    pub const fn rc_max() -> u32 {
-        (1 << 18) - 1
-    }
-
-    pub fn inc_rc(&mut self) {
-        let rc = self.rc();
-        if rc < Self::rc_max() - 1 {
-            self.set_rc(rc + 1)
-        }
-    }
-
-    pub fn dec_rc(&mut self) {
-        let rc = self.rc();
-        debug_assert!(rc > 0, "reference count was decreased below 0");
-        if rc < Self::rc_max() - 1 {
-            self.set_rc(rc - 1)
-        }
     }
 }
 
