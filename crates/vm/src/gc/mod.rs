@@ -2,6 +2,7 @@ pub mod alloc;
 #[cfg(test)]
 mod test;
 use alloc::RootSetHandle;
+use inkstone_util::by_ptr::AsCmpPtr;
 use mimalloc_rust_sys::basic_allocation::mi_free;
 use modular_bitfield::prelude::*;
 use std::cell::{Cell, UnsafeCell};
@@ -106,6 +107,12 @@ impl<T: ?Sized> Drop for Gc<T> {
     }
 }
 
+impl<T: ?Sized> AsCmpPtr for Gc<T> {
+    fn as_cmp_ptr(&self) -> *const () {
+        self.0.as_ptr() as *const ()
+    }
+}
+
 unsafe fn gc_pointer_before_cloning(mut ptr: NonNull<GcHeader>) {
     let header = ptr.as_mut();
     header.inc_rc();
@@ -179,17 +186,9 @@ impl Drop for RawGcPtr {
     }
 }
 
-impl PartialEq for RawGcPtr {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for RawGcPtr {}
-
-impl Hash for RawGcPtr {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+impl AsCmpPtr for RawGcPtr {
+    fn as_cmp_ptr(&self) -> *const () {
+        self.0.as_ptr() as *const ()
     }
 }
 

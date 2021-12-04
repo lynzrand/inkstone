@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use bytes::Buf;
 use inkstone_bytecode::inst::{Inst, InstContainer};
+use inkstone_util::by_ptr::{ByPtr, ByPtrRef};
 
 use crate::gc::alloc::GcAllocator;
 use crate::gc::{Gc, RawGcPtr};
@@ -91,7 +92,7 @@ pub struct InkstoneVm {
 }
 
 struct TaskList {
-    sleeping_tasks: HashSet<RawGcPtr>,
+    sleeping_tasks: HashSet<ByPtr<Gc<Task>>>,
     event_queue_start: Option<Gc<Task>>,
     event_queue_end: Option<Gc<Task>>,
 }
@@ -145,8 +146,9 @@ impl TaskList {
     }
 
     fn wake_sleeping(&mut self, task: Gc<Task>) {
-        self.sleeping_tasks.remove(&task.as_raw_ptr());
-        self.push_task(task);
+        let task_by_ptr = ByPtr::new(task);
+        self.sleeping_tasks.remove(&task_by_ptr);
+        self.push_task(task_by_ptr.unwrap());
     }
 }
 
