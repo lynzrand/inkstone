@@ -1,16 +1,10 @@
-use std::alloc::Layout;
 use std::borrow::Borrow;
-use std::collections::HashSet;
-use std::ptr::NonNull;
-use std::sync::Arc;
 
 use bytes::Buf;
-use inkstone_bytecode::inst::{Inst, InstContainer};
-use inkstone_util::by_ptr::{ByPtr, ByPtrRef};
+use inkstone_bytecode::inst::InstContainer;
 
-use crate::gc::alloc::GcAllocator;
-use crate::gc::{Gc, GcTracerVTable, RawGcPtr, Trace};
-use crate::value::{Closure, Function, TupleHeader, Val};
+use crate::gc::{Gc, GcTracerVTable, Trace};
+use crate::value::{Function, Val};
 use crate::*;
 
 pub(crate) struct Frame {

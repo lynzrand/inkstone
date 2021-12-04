@@ -1,10 +1,10 @@
-use std::fmt::{Debug, DebugList, Display};
+use std::fmt::{Debug, Display};
 
 use bytes::{Buf, BufMut};
 
 use crate::inst::Inst;
 
-use super::{param, IParamType};
+use super::IParamType;
 
 pub trait InstContainer: Buf {
     /// Move to the specified **absolute** position

@@ -1,4 +1,4 @@
-use inkstone_syn::ast::{AstNode, BlockScope, Root};
+use inkstone_syn::ast::{AstNode, Root};
 use test_env_log::test;
 
 use crate::ChunkContext;

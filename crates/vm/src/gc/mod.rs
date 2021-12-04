@@ -6,7 +6,6 @@ use inkstone_util::by_ptr::AsCmpPtr;
 use mimalloc_rust_sys::basic_allocation::mi_free;
 use modular_bitfield::prelude::*;
 use std::cell::{Cell, UnsafeCell};
-use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
@@ -154,9 +153,9 @@ impl<T: ?Sized> AsCmpPtr for Gc<T> {
 impl<T: ?Sized> Trace for Gc<T> {
     fn trace(&self, tracer: VRefMut<GcTracerVTable>) {
         unsafe {
-            let header = unsafe { self.header_ptr().as_ref() };
+            let header = self.header_ptr().as_ref();
             let trace_vtable_ptr = header.trace_impl;
-            let trace_vtable = unsafe { &*header.trace_impl };
+            let trace_vtable = &*header.trace_impl;
             (trace_vtable.trace)(
                 VRef::from_raw(
                     NonNull::new_unchecked(trace_vtable_ptr as *mut _),

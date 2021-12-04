@@ -11,7 +11,7 @@ use std::rc::Rc;
 use fnv::FnvHashMap;
 use func::{FunctionCompileCtx, FunctionCompileMetadata};
 use inkstone_bytecode::Function;
-use inkstone_syn::ast::{AstNode, BlockScope, Root};
+use inkstone_syn::ast::{AstNode, Root};
 use smol_str::SmolStr;
 
 pub struct ChunkContext {
@@ -19,7 +19,7 @@ pub struct ChunkContext {
 }
 
 /// Compile the given chunk
-pub fn compile_chunk(chunk: Root, ctx: ChunkContext) -> (Function, FunctionCompileMetadata) {
+pub fn compile_chunk(chunk: Root, _ctx: ChunkContext) -> (Function, FunctionCompileMetadata) {
     let builder = Rc::new(RefCell::new(SymbolListBuilder::new()));
     let scope =
         scope::ScopeBuilder::new(chunk.span().start().into(), scope::ScopeType::Module, None);

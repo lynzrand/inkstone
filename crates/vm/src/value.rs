@@ -1,13 +1,9 @@
 mod tuple;
 
-use std::alloc::Layout;
 use std::collections::{HashMap, VecDeque};
-use std::ptr::NonNull;
-use std::sync::Arc;
 
-use smol_str::SmolStr;
+use inkstone_util::string::ArcStr;
 
-use crate::gc::alloc::GcAllocator;
 use crate::gc::{Gc, RawGcPtr, Trace};
 
 pub enum Val {
@@ -283,7 +279,7 @@ pub struct Scope {
 }
 
 pub struct Function {
-    pub name: Option<SmolStr>,
+    pub name: Option<ArcStr>,
     pub inst: Vec<u8>,
     pub param_cnt: u32,
     pub binds_self: bool,

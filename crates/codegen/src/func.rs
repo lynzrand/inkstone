@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -7,18 +7,17 @@ use std::sync::Arc;
 use crate::error::CompileError;
 use crate::scope::{
     self, LexicalScope, ScopeBuilder, ScopeEntry, ScopeType, ScopeVariable, UpValueCapture,
-    UpValueKind,
 };
 use crate::SymbolListBuilder;
 use fnv::{FnvHashMap, FnvHashSet};
-use inkstone_bytecode::inst::{self, write_inst, IParamType, Inst, InstContainerMut};
+use inkstone_bytecode::inst::{write_inst, IParamType, Inst, InstContainerMut};
 use inkstone_bytecode::{Constant, Function};
 use inkstone_syn::ast::{
     AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope, DotExpr, Expr, ExprStmt,
     ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
     ReturnExpr, Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
 };
-use inkstone_syn::parse::tag_util;
+
 use itertools::Itertools;
 use smol_str::SmolStr;
 
@@ -301,7 +300,7 @@ impl<'a> FunctionCompileCtx<'a> {
                 Stmt::Use(_v) => {
                     // `use foo` is not yet getting parsed
                 }
-                Stmt::Mod(v) => {}
+                Stmt::Mod(_v) => {}
             }
         }
 
@@ -386,8 +385,8 @@ impl<'a> FunctionCompileCtx<'a> {
             Stmt::Expr(v) => self.compile_expr_stmt(v, tail),
             Stmt::Def(v) => self.compile_def_stmt(v),
             Stmt::Let(v) => self.compile_let_stmt(v),
-            Stmt::Use(v) => todo!(),
-            Stmt::Mod(v) => todo!(),
+            Stmt::Use(_v) => todo!(),
+            Stmt::Mod(_v) => todo!(),
         }
     }
 
@@ -838,7 +837,7 @@ impl<'a> FunctionCompileCtx<'a> {
         self.set_curr_bb(next_bb);
     }
 
-    fn compile_for_loop_expr(&mut self, v: ForLoopExpr) {
+    fn compile_for_loop_expr(&mut self, _v: ForLoopExpr) {
         todo!()
     }
 

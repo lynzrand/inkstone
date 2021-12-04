@@ -1,5 +1,3 @@
-use std::ptr::NonNull;
-
 use inkstone_util::string::ArcStr;
 
 use crate::gc::Gc;

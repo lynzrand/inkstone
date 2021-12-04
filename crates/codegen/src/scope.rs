@@ -1,9 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::BorrowMut;
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
-use fnv::FnvBuildHasher;
-use inkstone_syn::ast::{BlockScope, Expr, FuncDef};
 use smol_str::SmolStr;
 use vec1::Vec1;
 

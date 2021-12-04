@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use inst::InstContainerFormatter;
 use smol_str::SmolStr;
 use util::ArcByPtr;
