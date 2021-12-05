@@ -320,7 +320,17 @@ impl<'r> InstExecCtx<'r> {
     }
 
     fn wake_task(&mut self, task: Gc<Task>) {
-        todo!("wake task")
+        if task.is_detached {
+            let task_by_ptr = ByPtr::new(task);
+            if self.task_list.sleeping_tasks.remove(&task_by_ptr) {
+                // wake success
+                self.task_list.push_task(task_by_ptr.unwrap());
+            } else {
+                // Maybe it's already in queue or not sleeping at all. No-op.
+            }
+        } else {
+            self.task_list.push_task(task);
+        }
     }
 
     fn detach_task(&mut self, task: Gc<Task>) {
@@ -346,6 +356,41 @@ impl GcAllocator {
             .expect("Failed to compute tuple layout");
         unsafe { self.alloc_raw(layout, vtable) }
     }
+}
+
+macro_rules! impl_binary {
+    (($frame:expr, $l:ident, $r:ident), $if_both_int:expr, $if_both_double:expr, $else:expr) => {{
+        #[allow(unused)]
+        let v = {
+            let ($l, $r) = $frame.pop2();
+            if let (Some($l), Some($r)) = ($l.as_int(), $r.as_int()) {
+                $if_both_int
+            } else if let (Some($l), Some($r)) = ($l.as_float(), $r.as_float()) {
+                $if_both_double
+            } else {
+                $else
+            }
+        };
+
+        v
+    }};
+}
+
+macro_rules! impl_cmp {
+    ($frame:expr, $op:tt, $name:literal) => {
+        impl_binary!(
+            ($frame, l, r),
+            {
+                $frame.push(Val::Bool(l.$op(&r)));
+                Continue
+            },
+            {
+                $frame.push(Val::Bool(l.$op(&r)));
+                Continue
+            },
+            todo!(concat!($name, " slow"))
+        )
+    };
 }
 
 /// Handle a single instruction.
@@ -402,121 +447,136 @@ fn exec_inst(inst: Inst, frame: &mut Frame, cx: InstExecCtx<'_>) -> InstAction {
             frame.push(Val::Nil);
             Continue
         }
-        Inst::Add => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+        Inst::Add => impl_binary!(
+            (frame, l, r),
+            {
                 frame.push(Val::Int(l.wrapping_add(r)));
                 Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+            },
+            {
                 frame.push(Val::Float(l + r));
                 Continue
-            } else {
-                add_slow(frame, lhs, rhs)
-            }
-        }
-        Inst::Sub => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+            },
+            add_slow(frame, l, r)
+        ),
+        Inst::Sub => impl_binary!(
+            (frame, l, r),
+            {
                 frame.push(Val::Int(l.wrapping_sub(r)));
                 Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+            },
+            {
                 frame.push(Val::Float(l - r));
                 Continue
-            } else {
-                sub_slow(frame, lhs, rhs)
-            }
-        }
-        Inst::Mul => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+            },
+            sub_slow(frame, l, r)
+        ),
+        Inst::Mul => impl_binary!(
+            (frame, l, r),
+            {
                 frame.push(Val::Int(l.wrapping_mul(r)));
                 Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+            },
+            {
                 frame.push(Val::Float(l * r));
                 Continue
-            } else {
-                mul_slow(frame, lhs, rhs)
-            }
-        }
-        Inst::Div => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+            },
+            mul_slow(frame, l, r)
+        ),
+        Inst::Div => impl_binary!(
+            (frame, l, r),
+            {
                 frame.push(Val::Int(l.wrapping_div(r)));
                 Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+            },
+            {
                 frame.push(Val::Float(l / r));
                 Continue
-            } else {
-                div_slow(frame, lhs, rhs)
-            }
-        }
-        Inst::Rem => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
-                frame.push(Val::Int(l.wrapping_rem(r)));
+            },
+            div_slow(frame, l, r)
+        ),
+        Inst::Rem => impl_binary!(
+            (frame, l, r),
+            {
+                frame.push(Val::Int(l.wrapping_add(r)));
                 Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
+            },
+            {
                 frame.push(Val::Float(l % r));
                 Continue
-            } else {
-                todo!("rem slow")
-            }
-        }
-        Inst::Pow => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+            },
+            todo!("rem slow")
+        ),
+        Inst::Pow => impl_binary!(
+            (frame, l, r),
+            {
                 if !(0..u32::MAX as i64).contains(&r) {
                     Panic
                 } else {
                     frame.push(Val::Int(l.pow(r as u32)));
                     Continue
                 }
-            } else if let (Some(l), Some(r)) = (lhs.as_float(), rhs.as_float()) {
-                frame.push(Val::Float(l % r));
+            },
+            {
+                frame.push(Val::Float(l.powf(r)));
                 Continue
-            } else {
-                todo!("rem slow")
-            }
-        }
-        Inst::BitAnd => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_bool(), rhs.as_bool()) {
-                frame.push(Val::Bool(l & r));
-                Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+            },
+            todo!("pow slow")
+        ),
+        Inst::BitAnd => impl_binary!(
+            (frame, l, r),
+            {
                 frame.push(Val::Int(l & r));
                 Continue
-            } else {
-                Panic
-            }
-        }
-        Inst::BitOr => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_bool(), rhs.as_bool()) {
-                frame.push(Val::Bool(l | r));
+            },
+            Panic,
+            todo!("bitand slow")
+        ),
+        Inst::BitOr => impl_binary!(
+            (frame, l, r),
+            {
+                frame.push(Val::Int(l | r));
                 Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
-                frame.push(Val::Int(l & r));
-                Continue
-            } else {
-                Panic
-            }
-        }
-        Inst::BitXor => {
-            let (lhs, rhs) = frame.pop2();
-            if let (Some(l), Some(r)) = (lhs.as_bool(), rhs.as_bool()) {
-                frame.push(Val::Bool(l ^ r));
-                Continue
-            } else if let (Some(l), Some(r)) = (lhs.as_int(), rhs.as_int()) {
+            },
+            Panic,
+            todo!("bitor slow")
+        ),
+        Inst::BitXor => impl_binary!(
+            (frame, l, r),
+            {
                 frame.push(Val::Int(l ^ r));
                 Continue
-            } else {
-                Panic
-            }
-        }
-        Inst::Shl => todo!(),
-        Inst::Shr => todo!(),
-        Inst::ShrL => todo!(),
+            },
+            Panic,
+            todo!("bitand slow")
+        ),
+        Inst::Shl => impl_binary!(
+            (frame, l, r),
+            {
+                frame.push(Val::Int(l << r));
+                Continue
+            },
+            Panic,
+            todo!("bitand slow")
+        ),
+        Inst::Shr => impl_binary!(
+            (frame, l, r),
+            {
+                frame.push(Val::Int(l >> r));
+                Continue
+            },
+            Panic,
+            todo!("bitand slow")
+        ),
+        Inst::ShrL => impl_binary!(
+            (frame, l, r),
+            {
+                frame.push(Val::Int((l as u64 >> r) as i64));
+                Continue
+            },
+            Panic,
+            todo!("bitand slow")
+        ),
         Inst::And => {
             let (lhs, rhs) = frame.pop2();
             frame.push(Val::Bool(lhs.to_bool() && rhs.to_bool()));
@@ -532,30 +592,12 @@ fn exec_inst(inst: Inst, frame: &mut Frame, cx: InstExecCtx<'_>) -> InstAction {
             frame.push(Val::Bool(lhs.to_bool()));
             Continue
         }
-        Inst::Lt => {
-            // TODO: implement
-            Continue
-        }
-        Inst::Gt => {
-            // TODO: implement
-            Continue
-        }
-        Inst::Le => {
-            // TODO: implement
-            Continue
-        }
-        Inst::Ge => {
-            // TODO: implement
-            Continue
-        }
-        Inst::Eq => {
-            // TODO: implement
-            Continue
-        }
-        Inst::Ne => {
-            // TODO: implement
-            Continue
-        }
+        Inst::Lt => impl_cmp!(frame, lt, "lt"),
+        Inst::Gt => impl_cmp!(frame, gt, "gt"),
+        Inst::Le => impl_cmp!(frame, le, "le"),
+        Inst::Ge => impl_cmp!(frame, ge, "ge"),
+        Inst::Eq => impl_cmp!(frame, eq, "eq"),
+        Inst::Ne => impl_cmp!(frame, ne, "ne"),
         Inst::TupleNew => {
             let cnt = frame.read_param::<u32>();
             let mut stack = frame.stack_mut();
