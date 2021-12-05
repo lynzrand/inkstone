@@ -246,6 +246,23 @@ impl AsCmpPtr for RawGcPtr {
     }
 }
 
+impl Trace for RawGcPtr {
+    fn trace(&self, tracer: VRefMut<GcTracerVTable>) {
+        unsafe {
+            let header = self.header();
+            let trace_vtable_ptr = header.trace_impl;
+            let trace_vtable = &*header.trace_impl;
+            (trace_vtable.trace)(
+                VRef::from_raw(
+                    NonNull::new_unchecked(trace_vtable_ptr as *mut _),
+                    self.value(),
+                ),
+                tracer,
+            );
+        }
+    }
+}
+
 // Assert layout
 static_assertions::assert_eq_align!(RawGcPtr, Gc<()>);
 static_assertions::assert_eq_size!(RawGcPtr, Gc<()>);

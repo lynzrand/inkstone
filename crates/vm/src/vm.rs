@@ -90,6 +90,24 @@ impl TaskList {
 }
 
 impl InkstoneVm {
+    pub fn invoke(&mut self, f: Gc<Closure>, params: &[Val]) {
+        let frame = Frame {
+            caller: todo!(),
+            func: todo!(),
+            stack: todo!(),
+            upvalues: todo!(),
+            locals: todo!(),
+            ip: todo!(),
+        };
+        let task = Task {
+            name: Some("<main>".into()),
+            is_detached: false,
+            stack_top: Some(Gc::new(frame, &mut self.allocator).expect("Failed to allocate")),
+            next: None,
+            result: None,
+        };
+    }
+
     /// The loop executing different tasks.
     ///
     /// This loop is responsible for running every task

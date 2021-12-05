@@ -105,6 +105,10 @@ impl<H> ArcStr<H> {
         self.0 == other.0
     }
 
+    pub fn as_str(&self) -> &str {
+        self.deref()
+    }
+
     pub fn str_start(&self) -> *const u8 {
         let as_u8ptr = self.0.as_ptr() as *const u8;
         unsafe { as_u8ptr.add(std::mem::size_of::<ArcStrHeader>()) }

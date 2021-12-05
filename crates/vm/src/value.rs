@@ -2,10 +2,14 @@ mod tuple;
 
 use std::collections::{HashMap, VecDeque};
 
+use inkstone_util::by_ptr::ByPtr;
 use inkstone_util::string::ArcStr;
 
 use crate::gc::{Gc, RawGcPtr, Trace};
-use crate::vm::frame::Frame;
+use crate::vm::frame::{self, Frame};
+
+/// A symbol is a pointer to a singleton string. It is never garbage collected.
+type Symbol = ByPtr<ArcStr>;
 
 #[derive(Clone)]
 pub enum Val {
@@ -13,12 +17,12 @@ pub enum Val {
     Bool(bool),
     Int(i64),
     Float(f64),
-    String(Gc<String>),
-    Tuple(Gc<TupleHeader>),
+    String(ArcStr),
+    Symbol(Symbol),
+    Tuple(TupleRef),
     Array(Gc<Array>),
     Object(Gc<Object>),
     Closure(Gc<Closure>),
-    Symbol(u64),
 }
 
 impl Val {
@@ -105,9 +109,9 @@ impl Val {
         matches!(self, Self::String(..))
     }
 
-    pub fn as_string(&self) -> Option<&Gc<String>> {
+    pub fn as_string(&self) -> Option<&str> {
         if let Self::String(v) = self {
-            Some(v)
+            Some(v.as_str())
         } else {
             None
         }
@@ -172,15 +176,15 @@ impl Val {
         matches!(self, Self::Symbol(..))
     }
 
-    pub fn as_symbol(&self) -> Option<u64> {
+    pub fn as_symbol(&self) -> Option<&ByPtr<ArcStr>> {
         if let Self::Symbol(v) = self {
-            Some(*v)
+            Some(v)
         } else {
             None
         }
     }
 
-    pub fn try_into_string(self) -> Result<Gc<String>, Self> {
+    pub fn try_into_string(self) -> Result<ArcStr, Self> {
         if let Self::String(v) = self {
             Ok(v)
         } else {
@@ -188,7 +192,7 @@ impl Val {
         }
     }
 
-    pub fn try_into_tuple(self) -> Result<Gc<TupleHeader>, Self> {
+    pub fn try_into_tuple(self) -> Result<TupleRef, Self> {
         if let Self::Tuple(v) = self {
             Ok(v)
         } else {
@@ -224,6 +228,7 @@ impl Val {
 impl Trace for Val {
     fn trace(&self, tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
         match self {
+            // these variants don't hold a GC-ed pointer.
             Val::Nil
             | Val::Bool(_)
             | Val::Int(_)
@@ -231,14 +236,17 @@ impl Trace for Val {
             | Val::Symbol(_)
             | Val::String(_) => {}
 
-            Val::Tuple(tuple) => todo!(),
-            Val::Array(arr) => todo!(),
-            Val::Object(obj) => todo!(),
-            Val::Closure(closure) => todo!(),
+            // these variants hold a GC-ed pointer, so they need to call the
+            // trace method on the pointer
+            Val::Tuple(tuple) => tuple.trace(tracer),
+            Val::Array(arr) => arr.trace(tracer),
+            Val::Object(obj) => obj.trace(tracer),
+            Val::Closure(closure) => closure.trace(tracer),
         }
     }
 }
 
+#[derive(Clone)]
 pub struct TupleRef {
     ptr: RawGcPtr,
 }
@@ -279,6 +287,12 @@ impl TupleRef {
     }
 }
 
+impl Trace for TupleRef {
+    fn trace(&self, tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
+        self.ptr.trace(tracer)
+    }
+}
+
 pub struct TupleHeader {
     pub arity: u16,
     pub val: [Val; 0],
@@ -290,7 +304,7 @@ pub struct Array {
 
 pub struct Object {
     pub proto: Gc<Object>,
-    pub val: HashMap<u64, Val>,
+    pub val: HashMap<Symbol, Val>,
 }
 
 pub struct Closure {
@@ -313,4 +327,62 @@ pub struct Function {
     pub has_rest_param: bool,
     pub constants: Vec<Val>,
     pub labels: Vec<u32>,
+}
+
+impl Trace for Array {
+    fn trace(&self, mut tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
+        for val in &self.val {
+            val.trace(tracer.borrow_mut());
+        }
+    }
+}
+
+impl Trace for Object {
+    fn trace(&self, mut tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
+        self.val.iter().for_each(|(_name, val)| {
+            val.trace(tracer.borrow_mut());
+        });
+        self.proto.trace(tracer)
+    }
+}
+
+impl Trace for Closure {
+    fn trace(&self, mut tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
+        self.capture
+            .iter()
+            .for_each(|v| v.trace(tracer.borrow_mut()));
+        self.func.trace(tracer);
+    }
+}
+
+impl Trace for UpValue {
+    fn trace(&self, tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
+        match self {
+            UpValue::Local(frame, _) => frame.trace(tracer),
+            UpValue::Detached(val) => val.trace(tracer),
+        }
+    }
+}
+
+impl Trace for Function {
+    fn trace(&self, mut tracer: vtable::VRefMut<crate::gc::GcTracerVTable>) {
+        for it in &self.constants {
+            it.trace(tracer.borrow_mut())
+        }
+    }
+}
+
+mod tracer_impl {
+    #![allow(non_upper_case_globals)]
+
+    use super::*;
+    use crate::*;
+    use gc::{GcTracerVTable, Trace};
+
+    TraceVTable_static!(static Val_TraceVTable for Val);
+    TraceVTable_static!(static Array_TraceVTable for Array);
+    TraceVTable_static!(static Object_TraceVTable for Object);
+    TraceVTable_static!(static Closure_TraceVTable for Closure);
+    TraceVTable_static!(static UpValue_TraceVTable for UpValue);
+    TraceVTable_static!(static Function_TraceVTable for Function);
 }

@@ -3,6 +3,8 @@ use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
+use crate::string::ArcStr;
+
 /// A trait for types that can be compared directly by pointer for equality
 pub trait AsCmpPtr {
     /// Get the pointer that directly represents `self`
@@ -28,6 +30,7 @@ impl<'a, T> ByPtrRef<'a, T> {
 
 /// A wrapping struct to allow types to be compared by pointer.
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct ByPtr<T>(T);
 
 impl<T: AsCmpPtr> ByPtr<T> {
@@ -157,5 +160,11 @@ impl<T: AsCmpPtr> AsCmpPtr for ByPtr<T> {
 impl<T: AsCmpPtr> AsCmpPtr for ByPtrRef<'_, T> {
     fn as_cmp_ptr(&self) -> *const () {
         self.0.as_cmp_ptr()
+    }
+}
+
+impl AsCmpPtr for ArcStr {
+    fn as_cmp_ptr(&self) -> *const () {
+        self.as_ptr() as *const ()
     }
 }
