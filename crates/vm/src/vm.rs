@@ -12,6 +12,7 @@ use std::sync::Arc;
 use bytes::Buf;
 use inkstone_bytecode::inst::{Inst, InstContainer};
 use inkstone_util::by_ptr::{ByPtr, ByPtrRef};
+use inkstone_util::string::ArcStr;
 
 use crate::gc::alloc::GcAllocator;
 use crate::gc::{Gc, RawGcPtr};
@@ -90,22 +91,12 @@ impl TaskList {
 }
 
 impl InkstoneVm {
-    pub fn invoke(&mut self, f: Gc<Closure>, params: &[Val]) {
-        let frame = Frame {
-            caller: todo!(),
-            func: todo!(),
-            stack: todo!(),
-            upvalues: todo!(),
-            locals: todo!(),
-            ip: todo!(),
+    pub fn invoke(&mut self, f: Gc<Closure>, params: &[Val]) -> Gc<Task> {
+        let mut cx = InstExecCtx {
+            alloc: &mut self.allocator,
+            task_list: &mut self.task_list,
         };
-        let task = Task {
-            name: Some("<main>".into()),
-            is_detached: false,
-            stack_top: Some(Gc::new(frame, &mut self.allocator).expect("Failed to allocate")),
-            next: None,
-            result: None,
-        };
+        cx.create_task(Some("<main>".into()), f, params)
     }
 
     /// The loop executing different tasks.
@@ -254,6 +245,7 @@ impl InkstoneVm {
             let inst = frame.read_inst();
             let cx = InstExecCtx {
                 alloc: &mut self.allocator,
+                task_list: &mut self.task_list,
             };
             let action = exec_inst(inst, frame, cx);
             if action != InstAction::Continue {
@@ -300,11 +292,31 @@ enum InstAction {
 
 struct InstExecCtx<'r> {
     alloc: &'r mut GcAllocator,
+    task_list: &'r mut TaskList,
 }
 
 impl<'r> InstExecCtx<'r> {
-    fn create_task(&mut self, closure: Gc<Closure>, params: &[Gc<Val>]) -> Gc<Task> {
-        todo!("create task")
+    fn create_task(
+        &mut self,
+        name: Option<ArcStr>,
+        closure: Gc<Closure>,
+        params: &[Val],
+    ) -> Gc<Task> {
+        let frame = Frame::new(
+            closure.func.clone(),
+            None,
+            params.iter().cloned(),
+            &closure.capture,
+        );
+        let frame = Gc::new(frame, self.alloc).expect("OOM");
+        let task = Task {
+            name,
+            is_detached: false,
+            stack_top: Some(frame),
+            next: None,
+            result: None,
+        };
+        Gc::new(task, self.alloc).expect("OOM")
     }
 
     fn wake_task(&mut self, task: Gc<Task>) {

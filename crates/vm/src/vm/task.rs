@@ -19,3 +19,26 @@ pub struct Task {
 
     pub(crate) result: Option<Val>,
 }
+
+mod trace_impl {
+    use crate::gc::{GcTracerVTable, Trace};
+    use crate::*;
+
+    use super::Task;
+
+    impl Trace for Task {
+        fn trace(&self, mut tracer: vtable::VRefMut<GcTracerVTable>) {
+            if let Some(frame) = &self.stack_top {
+                frame.trace(tracer.borrow_mut())
+            }
+            if let Some(next) = &self.next {
+                next.trace(tracer.borrow_mut())
+            }
+            if let Some(result) = &self.result {
+                result.trace(tracer)
+            }
+        }
+    }
+
+    TraceVTable_static! {#[allow(non_upper_case_globals)] static Task_TraceVTable for Task }
+}
