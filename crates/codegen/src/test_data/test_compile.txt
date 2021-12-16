@@ -1,0 +1,109 @@
+Function {
+    name: None,
+    inst: [
+        PushI32 num=1
+        PushI32 num=1
+        Add
+        StoreLocal reg=0
+        Pop
+        PushI32 num=1
+        LoadLocal reg=0
+        Mul
+        PushI32 num=4
+        Add
+        StoreLocal reg=1
+        Pop
+        PushConst idx=0
+        ClosureNew upvalue_cnt=0
+        StoreLocal reg=2
+        Pop
+        Pop
+        PushConst idx=1
+        ClosureNew upvalue_cnt=0
+        StoreLocal reg=3
+        Pop
+        LoadLocal reg=0
+        Return
+    ],
+    param_cnt: 0,
+    binds_self: false,
+    has_rest_param: false,
+    constants: [
+        FunctionBody(
+            Function {
+                name: Some(
+                    "foo",
+                ),
+                inst: [
+                    LoadLocal reg=0
+                    LoadLocal reg=1
+                    LoadLocal reg=2
+                    PushModuleObject
+                    LoadField idx=0
+                    Add
+                    Add
+                    Add
+                    Return
+                ],
+                param_cnt: 3,
+                binds_self: false,
+                has_rest_param: false,
+                constants: [
+                    String(
+                        "i",
+                    ),
+                ],
+                labels: [
+                    0,
+                ],
+                metadata: None,
+            },
+        ),
+        FunctionBody(
+            Function {
+                name: None,
+                inst: [
+                    PushConst idx=0
+                    WithUpvalue up_reg=0
+                    WithUpvalue up_reg=1
+                    ClosureNew upvalue_cnt=2
+                    Return
+                ],
+                param_cnt: 2,
+                binds_self: false,
+                has_rest_param: false,
+                constants: [
+                    FunctionBody(
+                        Function {
+                            name: None,
+                            inst: [
+                                LoadUpvalue up_reg=0
+                                LoadUpvalue up_reg=1
+                                LoadLocal reg=0
+                                Add
+                                Add
+                                Return
+                            ],
+                            param_cnt: 1,
+                            binds_self: false,
+                            has_rest_param: false,
+                            constants: [],
+                            labels: [
+                                0,
+                            ],
+                            metadata: None,
+                        },
+                    ),
+                ],
+                labels: [
+                    0,
+                ],
+                metadata: None,
+            },
+        ),
+    ],
+    labels: [
+        0,
+    ],
+    metadata: None,
+}

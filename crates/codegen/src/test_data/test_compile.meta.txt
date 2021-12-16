@@ -1,0 +1,14 @@
+FunctionCompileMetadata {
+    lexical_scope: LexicalScope {
+        mapping: {
+            "foo": 2,
+            "i": 0,
+            "baz": 3,
+            "bar": 1,
+        },
+    },
+    upvalue_capture: UpValueCapture {
+        scope_captures: {},
+        local_upvalue_cnt: 0,
+    },
+}

@@ -23,3 +23,7 @@ test-env-log = { version = "0.2.7", features = [
     "trace",
 ], default-features = false }
 tracing-subscriber = "0.2.24"
+
+pretty_assertions = "1"
+colored-diff = "0.2.2"
+expect-test = "1.1"

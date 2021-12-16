@@ -13,9 +13,10 @@ use fnv::{FnvHashMap, FnvHashSet};
 use inkstone_bytecode::inst::{write_inst, IParamType, Inst, InstContainerMut};
 use inkstone_bytecode::{Constant, Function};
 use inkstone_syn::ast::{
-    AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope, DotExpr, Expr, ExprStmt,
-    ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr, LetStmt, LiteralExpr,
-    ReturnExpr, Stmt, SubscriptExpr, UnaryExpr, WhileLoopExpr,
+    ArrayLiteralExpr, AssignExpr, AstNode, BinaryExpr, BinaryOpKind, BlockExpr, BlockScope,
+    DotExpr, Expr, ExprStmt, ForLoopExpr, FuncDef, FunctionCallExpr, IdentExpr, IfExpr, LambdaExpr,
+    LetStmt, LiteralExpr, ObjectLiteralExpr, ReturnExpr, Stmt, SubscriptExpr, TupleLiteralExpr,
+    UnaryExpr, WhileLoopExpr,
 };
 
 use itertools::Itertools;
@@ -499,8 +500,8 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Block(v) => self.compile_block_expr(v, tail),
             Expr::Literal(v) => self.compile_literal_expr(v),
             Expr::Lambda(v) => self.compile_lambda_expr(v),
-            Expr::Tuple(_) => todo!(),
-            Expr::Array(_) => todo!(),
+            Expr::Tuple(v) => self.compile_tuple_expr(v),
+            Expr::Array(v) => self.compile_array_expr(v),
             Expr::Object(_) => todo!(),
             Expr::Return(v) => self.compile_return_expr(v),
             Expr::Break(_) => todo!(),
@@ -924,6 +925,32 @@ impl<'a> FunctionCompileCtx<'a> {
 
         self.curr_bb()
             .emit_p(Inst::ClosureNew, meta.upvalue_capture.upvalue_cnt());
+    }
+
+    fn compile_tuple_expr(&mut self, v: TupleLiteralExpr) {
+        for expr in v.items() {
+            self.compile_expr(expr);
+        }
+        let cnt = v.items().count();
+        self.curr_bb().emit_p(Inst::TupleNew, cnt as u32);
+    }
+
+    fn compile_array_expr(&mut self, v: ArrayLiteralExpr) {
+        for expr in v.items() {
+            self.compile_expr(expr);
+        }
+        let cnt = v.items().count();
+        self.curr_bb().emit_p(Inst::ArrayNew, cnt as u32);
+    }
+
+    fn compile_object_expr(&mut self, v: ObjectLiteralExpr) {
+        self.curr_bb().emit(Inst::MapNew);
+
+        // for expr in v(){
+
+        //     self.compile_expr(expr);
+        // }
+        // let cnt = v.items().count();
     }
 
     fn compile_return_expr(&mut self, v: ReturnExpr) {

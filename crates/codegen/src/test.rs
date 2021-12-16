@@ -2,6 +2,7 @@ use inkstone_syn::ast::{AstNode, Root};
 use test_env_log::test;
 
 use crate::ChunkContext;
+use expect_test::expect_file;
 
 #[test]
 fn test_compile() {
@@ -24,9 +25,6 @@ i
 
     let (f, meta) = crate::compile_chunk(chunk, ctx);
 
-    println!("Function: {:#?}", f);
-    println!();
-    println!("Meta: {:#?}", meta);
-
-    panic!()
+    expect_file!["test_data/test_compile.txt"].assert_debug_eq(&f);
+    expect_file!["test_data/test_compile.meta.txt"].assert_debug_eq(&meta);
 }
