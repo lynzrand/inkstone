@@ -16,6 +16,18 @@ Inkstone is inspired by [RenPy][]. Various aspects of Inkstone are inspired by [
 [elixir]: https://elixir-lang.org/
 [haskell]: https://haskell.org/
 
+## Building
+
+To build Inkstone, you'll need to install [Rust 1.57 stable or later](https://www.rust-lang.org/tools/install).
+
+After installation, you only need to run:
+
+```
+cargo build
+```
+
+-- And you're good to go!
+
 ## Implementation status
 
 | Status | feature                  |
