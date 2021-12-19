@@ -9,6 +9,11 @@ use unicode_width::UnicodeWidthStr;
 fn main() {
     let opt = Opt::parse();
 
+    tracing_subscriber::FmtSubscriber::builder()
+        .without_time()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
     let input = if let Some(e) = opt.eval {
         e
     } else if let Some(f) = opt.file {

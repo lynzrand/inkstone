@@ -13,6 +13,7 @@ inkstone-vm = { path = "crates/vm" }
 clap = { version = "3.0.0-rc.4", features = ["derive"] }
 text_lines = "0.4.1"
 unicode-width = "0.1.9"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 
 [workspace]
 members = [".", "crates/*"]

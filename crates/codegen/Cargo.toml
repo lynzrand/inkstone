@@ -22,7 +22,7 @@ tracing = "0.1.28"
 test-env-log = { version = "0.2.7", features = [
     "trace",
 ], default-features = false }
-tracing-subscriber = "0.2.24"
+tracing-subscriber = "0.3.3"
 
 pretty_assertions = "1"
 colored-diff = "0.2.2"
