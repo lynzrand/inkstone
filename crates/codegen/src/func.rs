@@ -502,7 +502,7 @@ impl<'a> FunctionCompileCtx<'a> {
             Expr::Lambda(v) => self.compile_lambda_expr(v),
             Expr::Tuple(v) => self.compile_tuple_expr(v),
             Expr::Array(v) => self.compile_array_expr(v),
-            Expr::Object(_) => todo!(),
+            Expr::Object(v) => self.compile_object_expr(v),
             Expr::Return(v) => self.compile_return_expr(v),
             Expr::Break(_) => todo!(),
             Expr::Continue(_) => todo!(),
@@ -946,11 +946,16 @@ impl<'a> FunctionCompileCtx<'a> {
     fn compile_object_expr(&mut self, v: ObjectLiteralExpr) {
         self.curr_bb().emit(Inst::MapNew);
 
-        // for expr in v(){
-
-        //     self.compile_expr(expr);
-        // }
-        // let cnt = v.items().count();
+        for kv in v.kv() {
+            self.curr_bb().emit(Inst::Dup);
+            if let Some(v) = kv.value() {
+                self.compile_expr(v);
+            } else {
+                todo!("Unsupported key-only pair");
+            };
+            let key_const = self.constants.insert_symbol(kv.key().name().text());
+            self.curr_bb().emit_p(Inst::StoreField, key_const);
+        }
     }
 
     fn compile_return_expr(&mut self, v: ReturnExpr) {

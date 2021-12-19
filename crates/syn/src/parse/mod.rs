@@ -1030,10 +1030,7 @@ impl<'src> Parser<'src> {
         self.start_node(KeyValuePair);
 
         self.start_node(Name);
-        if self
-            .eat_if(|t| t == StringLiteral || t == Ident || t == Symbol)
-            .is_none()
-        {
+        if self.eat_if(|t| t == Ident).is_none() {
             let got = self.peek().into();
             let span = self.lexer.peek_span().into_text_range();
             self.emit_error(ParseError::error(

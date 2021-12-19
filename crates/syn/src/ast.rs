@@ -1,6 +1,6 @@
 use rowan::TextRange;
 
-use crate::SynTag;
+use crate::{SynTag, SyntaxElement};
 use crate::{SyntaxNode, SyntaxToken};
 
 /// Generate boilerplate code for this ast node.
@@ -486,6 +486,15 @@ impl ArrayLiteralExpr {
 }
 
 ast_node!(ObjectLiteralExpr, SynTag::ObjectLiteralExpr);
+impl ObjectLiteralExpr {
+    impl_child!(n, kv, KeyValuePair);
+}
+
+ast_node!(KeyValuePair, SynTag::KeyValuePair);
+impl KeyValuePair {
+    impl_child!(1!, key, Name);
+    impl_child!(1, value, Expr);
+}
 
 ast_node!(Binding, SynTag::Binding);
 impl Binding {
