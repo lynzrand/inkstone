@@ -1,6 +1,6 @@
 use rowan::TextRange;
 
-use crate::{SynTag, SyntaxElement};
+use crate::SynTag;
 use crate::{SyntaxNode, SyntaxToken};
 
 /// Generate boilerplate code for this ast node.
@@ -457,6 +457,11 @@ ast_node!(ContinueExpr, SynTag::ContinueExpr);
 
 ast_node!(BlockExpr, SynTag::BlockExpr);
 impl BlockExpr {
+    impl_child!(1!, block, Block);
+}
+
+ast_node!(Block, SynTag::Block);
+impl Block {
     impl_child!(1!, scope, BlockScope);
 }
 

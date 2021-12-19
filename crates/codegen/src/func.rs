@@ -843,7 +843,7 @@ impl<'a> FunctionCompileCtx<'a> {
     }
 
     fn compile_block_expr(&mut self, v: BlockExpr, tail: bool) {
-        self.compile_block_scope_with_tail(v.scope(), tail);
+        self.compile_block_scope_with_tail(v.block().scope(), tail);
     }
 
     fn compile_literal_expr(&mut self, lit: LiteralExpr) {
