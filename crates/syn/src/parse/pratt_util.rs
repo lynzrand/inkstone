@@ -75,7 +75,7 @@ pub fn infix_binding_power(op: SynTag) -> Option<Infix> {
         Mul | Div | Rem => Infix::Left(80).into(),
         Pow => Infix::Left(90).into(),
 
-        Dot | LBracket => Infix::Right(120).into(),
+        Dot => Infix::Right(120).into(),
 
         _ => None,
     }

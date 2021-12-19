@@ -528,9 +528,9 @@ impl<'src> Parser<'src> {
             } else {
                 self.eat_whitespace_in_parenthesis(in_parenthesis);
                 self.parse_primary_expr()?;
+                self.try_parse_subscript_expr(start)?;
             }
         }
-        self.eat_whitespace_in_parenthesis(in_parenthesis);
 
         loop {
             self.eat_whitespace_in_parenthesis(in_parenthesis);
@@ -552,21 +552,7 @@ impl<'src> Parser<'src> {
                 if lbp < start_precedence {
                     break;
                 }
-                if self.peek() == LBracket {
-                    // subscript expr
-                    self.start_node_at(start, SubscriptExpr);
-                    self.eat();
-                    self.eat_whitespace_or_line_feeds();
-                    match self.parse_expr_pratt(rbp, true, false) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            self.recover_error(|t| t == RBracket);
-                        }
-                    };
-                    self.eat_whitespace_in_parenthesis(true);
-                    expect_or_recover_with!(self, RBracket, |_| true, close_nodes = 1);
-                    self.finish_node();
-                } else if self.peek() == Dot {
+                if self.peek() == Dot {
                     // dot expr only accepts identifiers
                     self.start_node_at(start, DotExpr);
 
@@ -633,6 +619,31 @@ impl<'src> Parser<'src> {
             }
         }
 
+        Ok(())
+    }
+
+    fn try_parse_subscript_expr(&mut self, start: Checkpoint) -> Result<()> {
+        // subscript expr must have no space between it and its parent, or else it will be
+        // ambiguous with array
+        if self.peek() == LBracket {
+            // subscript expr
+            self.start_node_at(start, SubscriptExpr);
+            self.eat();
+            self.eat_whitespace_or_line_feeds();
+            match self.parse_expr_pratt(
+                infix_binding_power(LBracket).unwrap().binding_power().1,
+                true,
+                false,
+            ) {
+                Ok(_) => {}
+                Err(_) => {
+                    self.recover_error(|t| t == RBracket);
+                }
+            };
+            self.eat_whitespace_in_parenthesis(true);
+            expect_or_recover_with!(self, RBracket, |_| true, close_nodes = 1);
+            self.finish_node();
+        }
         Ok(())
     }
 
@@ -983,7 +994,8 @@ impl<'src> Parser<'src> {
                 no_return
             );
             self.eat_whitespace_or_line_feeds();
-            while self.try_eat_token(Comma) {
+            while self.peek() == Comma {
+                self.eat();
                 self.eat_whitespace_or_line_feeds();
                 if !self.peek().can_start_expr() {
                     break;

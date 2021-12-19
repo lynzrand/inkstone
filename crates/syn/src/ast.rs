@@ -391,13 +391,13 @@ impl IdentExpr {
 
 ast_node!(SubscriptExpr, SynTag::SubscriptExpr);
 impl SubscriptExpr {
-    impl_child!(nth!, parent, Expr, 1);
-    impl_child!(nth!, subscript, Expr, 2);
+    impl_child!(nth!, parent, Expr, 0);
+    impl_child!(nth!, subscript, Expr, 1);
 }
 
 ast_node!(DotExpr, SynTag::DotExpr);
 impl DotExpr {
-    impl_child!(nth!, parent, Expr, 1);
+    impl_child!(nth!, parent, Expr, 0);
     impl_child!(tok1!, subscript, |o| o == SynTag::Ident);
 }
 
