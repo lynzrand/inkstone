@@ -630,11 +630,7 @@ impl<'src> Parser<'src> {
             self.start_node_at(start, SubscriptExpr);
             self.eat();
             self.eat_whitespace_or_line_feeds();
-            match self.parse_expr_pratt(
-                infix_binding_power(LBracket).unwrap().binding_power().1,
-                true,
-                false,
-            ) {
+            match self.parse_expr_pratt(0, true, false) {
                 Ok(_) => {}
                 Err(_) => {
                     self.recover_error(|t| t == RBracket);
