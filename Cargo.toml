@@ -11,6 +11,8 @@ inkstone-codegen = { path = "crates/codegen" }
 inkstone-vm = { path = "crates/vm" }
 
 clap = { version = "3.0.0-rc.4", features = ["derive"] }
+text_lines = "0.4.1"
+unicode-width = "0.1.9"
 
 [workspace]
 members = [".", "crates/*"]

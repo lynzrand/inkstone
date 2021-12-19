@@ -10,9 +10,9 @@ pub type Result<T> = std::result::Result<T, ParseErrorSignal>;
 
 #[derive(Debug, Clone)]
 pub struct ParseError {
-    span: rowan::TextRange,
-    kind: ParseErrorKind,
-    level: ParseErrorLevel,
+    pub span: rowan::TextRange,
+    pub kind: ParseErrorKind,
+    pub level: ParseErrorLevel,
 }
 
 impl ParseError {
